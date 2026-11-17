@@ -50,8 +50,35 @@
                     :disabled="!currentTrack"
                     @click="next"
                 >→</button>
+
+                <button
+                    type="button"
+                    class="shuffle-button"
+                    :class="{ active: radioMode }"
+                    :aria-pressed="radioMode"
+                    :disabled="shuffleLoading"
+                    :title="radioMode ? 'Restart shuffle' : 'Shuffle tracks from 2018 onward'"
+                    aria-label="Shuffle tracks from 2018 onward"
+                    @click="startShuffle"
+                >⤨</button>
             </div>
         </div>
+
+        <p
+            v-if="shuffleLoading"
+            class="shuffle-status"
+            role="status"
+        >
+            Loading shuffle…
+        </p>
+
+        <p
+            v-if="shuffleError"
+            class="player-error"
+            role="status"
+        >
+            {{ shuffleError }}
+        </p>
 
         <div class="seek-line">
             <span>{{ formatTime(currentTime) }}</span>
@@ -295,6 +322,13 @@ export default {
             return store.getters.currentTrack;
         });
 
+        const radioMode = computed(() => {
+            return store.state.radioMode;
+        });
+
+        const shuffleLoading = ref(false);
+        const shuffleError = ref('');
+
         const audioRef = ref(null);
         const playing = ref(false);
         const showEffects = ref(false);
@@ -309,6 +343,7 @@ export default {
         const echo = ref(0);
         const speed = ref(100);
         const vinylMode = ref(true);
+
         const originalBpm = ref(null);
         const bpmLoading = ref(false);
 
@@ -318,6 +353,30 @@ export default {
 
         let audioContext = null;
         let graph = null;
+
+        async function startShuffle() {
+            if (shuffleLoading.value) {
+                return;
+            }
+
+            shuffleLoading.value = true;
+            shuffleError.value = '';
+
+            try {
+                const started = await store.dispatch('startRadio');
+
+                if (!started) {
+                    shuffleError.value =
+                        store.state.error ||
+                        'No tracks found from 2018 onward.';
+                }
+            } catch (error) {
+                console.error('Shuffle error:', error);
+                shuffleError.value = 'Unable to start shuffle.';
+            } finally {
+                shuffleLoading.value = false;
+            }
+        }
 
         const playbackRate = computed(() => {
             return speed.value / 100;
@@ -344,7 +403,8 @@ export default {
                 return '—';
             }
 
-            const adjustedBpm = originalBpm.value * playbackRate.value;
+            const adjustedBpm =
+                originalBpm.value * playbackRate.value;
 
             return `${Math.round(adjustedBpm)} BPM`;
         });
@@ -368,7 +428,9 @@ export default {
                 return '0:00';
             }
 
-            return `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}`;
+            return `${Math.floor(value / 60)}:${String(
+                Math.floor(value % 60)
+            ).padStart(2, '0')}`;
         }
 
         const progress = computed(() => {
@@ -403,7 +465,6 @@ export default {
                 }
 
                 console.warn('BPM detection failed:', error);
-
                 originalBpm.value = null;
             } finally {
                 if (requestId === bpmRequestId) {
@@ -417,12 +478,14 @@ export default {
         }
 
         function onTime() {
-            currentTime.value = audioRef.value?.currentTime || 0;
+            currentTime.value =
+                audioRef.value?.currentTime || 0;
         }
 
         function onAudioError() {
             if (currentTrack.value) {
-                audioError.value = 'Unable to play this audio file.';
+                audioError.value =
+                    'Unable to play this audio file.';
             }
 
             playing.value = false;
@@ -472,8 +535,9 @@ export default {
 
         function onEnded() {
             if (
+                store.state.radioMode ||
                 store.state.currentTrackIndex <
-                store.state.playlist.length - 1
+                    store.state.playlist.length - 1
             ) {
                 next();
             } else {
@@ -486,15 +550,20 @@ export default {
                 return;
             }
 
-            const position = Number(event.target.value) / 1000;
+            const position =
+                Number(event.target.value) / 1000;
 
-            audioRef.value.currentTime = position * duration.value;
-            currentTime.value = audioRef.value.currentTime;
+            audioRef.value.currentTime =
+                position * duration.value;
+
+            currentTime.value =
+                audioRef.value.currentTime;
         }
 
         function updateVolume() {
             if (audioRef.value) {
-                audioRef.value.volume = volume.value / 100;
+                audioRef.value.volume =
+                    volume.value / 100;
             }
         }
 
@@ -633,14 +702,14 @@ export default {
             applyPlaybackRate();
         });
 
-            watch(
-                () => currentTrack.value?.url,
-                async url => {
-                    analyzeBpm(url);
+        watch(
+            () => currentTrack.value?.url,
+            async url => {
+                analyzeBpm(url);
 
-                    await nextTick();
+                await nextTick();
 
-                    const audio = audioRef.value;
+                const audio = audioRef.value;
 
                 if (!audio) {
                     return;
@@ -674,12 +743,15 @@ export default {
 
         onBeforeUnmount(() => {
             audioRef.value?.pause();
-
             audioContext?.close().catch(() => {});
         });
 
         return {
             currentTrack,
+            radioMode,
+            shuffleLoading,
+            shuffleError,
+            startShuffle,
             audioRef,
             playing,
             showEffects,
@@ -782,6 +854,18 @@ export default {
     cursor: default;
 }
 
+.shuffle-button.active {
+    text-decoration: underline;
+    text-underline-offset: 5px;
+}
+
+.shuffle-status {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: #aaa;
+    letter-spacing: -0.5px;
+}
+
 .seek-line {
     display: flex;
     align-items: center;
@@ -839,8 +923,6 @@ export default {
 .player-effects input {
     width: 100%;
 }
-
-/* VINYL SPEED / PITCH */
 
 .vinyl-section {
     grid-column: 1 / -1;
@@ -970,19 +1052,14 @@ export default {
     margin: 9px 0 0;
 }
 
-/* RANGE INPUTS */
-
 input[type='range'] {
     appearance: none;
     -webkit-appearance: none;
-
     width: 100%;
     height: 2px;
     padding: 0;
-
     border: 0;
     border-radius: 0;
-
     background: linear-gradient(
         to right,
         #fff 0%,
@@ -990,7 +1067,6 @@ input[type='range'] {
         #444 var(--range-progress, 50%),
         #444 100%
     );
-
     cursor: pointer;
 }
 
@@ -1005,11 +1081,9 @@ input[type='range']::-webkit-slider-runnable-track {
 input[type='range']::-webkit-slider-thumb {
     appearance: none;
     -webkit-appearance: none;
-
     width: 10px;
     height: 10px;
     margin-top: -4px;
-
     background: #fff;
     border: 0;
     border-radius: 50%;
@@ -1044,8 +1118,6 @@ input:focus-visible {
     outline: 1px solid #fff;
     outline-offset: 4px;
 }
-
-/* MOBILE */
 
 @media (max-width: 768px) {
     .audio-player {
