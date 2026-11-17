@@ -82,6 +82,71 @@ Recursos:
 - Mensagens de erro de reprodução.
 - Painel expansível **Sound settings**.
 
+
+#### Shuffle global — lançamentos de 2018 em diante
+
+O player possui um modo **Shuffle global**, que permite ouvir músicas aleatórias de todo o catálogo GPGC, sem ficar limitado a um artista ou lançamento específico.
+
+**Funcionamento:**
+
+- O botão **⤨ Shuffle** inicia a reprodução aleatória.
+- São incluídas apenas músicas de lançamentos publicados a partir de **2018, inclusive**.
+- A seleção considera o catálogo completo de músicas elegíveis.
+- As músicas são embaralhadas utilizando o algoritmo **Fisher–Yates**.
+- Cada faixa é reproduzida uma vez por ciclo, antes de um novo embaralhamento.
+- Ao terminar a playlist, um novo ciclo começa automaticamente.
+- Quando possível, a primeira música do novo ciclo é diferente da última do ciclo anterior.
+- Os controles Play/Pause, Previous e Next continuam funcionando normalmente.
+- Ao selecionar manualmente uma faixa de um lançamento, o modo Shuffle é desativado.
+
+**Integração com a API:**
+
+O Shuffle consulta os seguintes endpoints:
+
+```text
+GET /api/v1/songs
+GET /api/v1/releases
+```
+
+As músicas são associadas aos seus respectivos lançamentos pelo campo `release_id`.
+
+Uma música entra na playlist quando:
+
+1. Possui uma URL de áudio.
+2. Está associada a um lançamento existente.
+3. O lançamento possui `release_date` com ano igual ou superior a 2018.
+
+**Implementação:**
+
+| Arquivo | Responsabilidade |
+| --- | --- |
+| `src/store/index.js` | Filtragem por ano, criação da playlist, embaralhamento e gerenciamento do modo Shuffle |
+| `src/components/PlayerBar.vue` | Botão Shuffle, reprodução automática e mensagens de carregamento e erro |
+
+A action `startRadio` consulta a API, filtra as músicas elegíveis e cria uma playlist embaralhada.
+
+A mutation `playNextTrack` gerencia a passagem entre faixas e reinicia o ciclo quando necessário.
+
+O estado `radioMode` identifica se a reprodução aleatória está ativa.
+
+O ano mínimo é definido pela constante:
+
+```javascript
+const SHUFFLE_START_YEAR = 2018;
+```
+
+**Interface:**
+
+O Shuffle utiliza um único botão, sem seletor de ano ou configurações adicionais. O filtro de 2018 em diante é fixo.
+
+**Limitações:**
+
+- Depende da disponibilidade da API e dos arquivos de áudio.
+- Lançamentos sem data válida não entram na seleção.
+- A reprodução automática pode depender das permissões do navegador.
+- O funcionamento deve ser validado com playlists pequenas e na transição entre ciclos.
+
+
 ### 5. Processamento de áudio
 
 O painel de configurações oferece:
