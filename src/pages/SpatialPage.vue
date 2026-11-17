@@ -1044,8 +1044,63 @@ export default {
     margin-top: 0.08rem;
 }
 
-.spatial-release:hover strong {
-    text-decoration: underline;
+/* HOVER — TRIÂNGULOS APONTANDO PARA FORA */
+
+.spatial-release:not(.spatial-paragraph) strong {
+    position: relative;
+    display: inline-block;
+    text-decoration: none;
+}
+
+.spatial-release:not(.spatial-paragraph) strong::before,
+.spatial-release:not(.spatial-paragraph) strong::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
+
+    border-top: 0.13em solid transparent;
+    border-bottom: 0.13em solid transparent;
+
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
+}
+
+/* ESQUERDA — APONTA PARA FORA */
+
+.spatial-release strong::before {
+    right: calc(100% + 0.3em);
+    border-left: 0.2em solid white;
+    transform: translate(12px, -50%);
+}
+
+/* DIREITA — APONTA PARA FORA */
+
+.spatial-release strong::after {
+    left: calc(100% + 0.3em);
+    border-right: 0.2em solid white;
+    transform: translate(-12px, -50%);
+}
+
+/* HOVER */
+
+.spatial-release:hover strong::before,
+.spatial-release:hover strong::after,
+.spatial-release:focus-visible strong::before,
+.spatial-release:focus-visible strong::after {
+    opacity: 1;
+    transform: translate(0, -50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spatial-release strong::before,
+    .spatial-release strong::after {
+        transition: none;
+    }
 }
 
 /* ABOUT — PARÁGRAFOS ESPACIAIS */
@@ -1074,7 +1129,6 @@ export default {
 
 .spatial-paragraph :deep(a) {
     color: inherit;
-    text-decoration: underline;
     pointer-events: auto;
 }
 
@@ -1163,9 +1217,6 @@ export default {
     margin-bottom: 12px;
 }
 
-.spatial-empty button {
-    text-decoration: underline;
-}
 
 /* MOBILE */
 
