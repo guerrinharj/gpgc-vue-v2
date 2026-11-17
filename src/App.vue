@@ -35,7 +35,6 @@ body { margin: 0; }
 button { all: unset; cursor: pointer; font-family: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible { outline: 1px solid #fff; outline-offset: 5px; }
 a { color: inherit; text-decoration: none; }
-a:hover, button:hover { text-decoration: underline; }
 h1, h2, h3, p { margin-top: 0; }
 #app.spatial-app .create-bar { position: absolute; top: 14px; left: 16px; z-index: 20; margin: 0; transform: none; flex-wrap: wrap; }
 #app.spatial-app .create-bar button { font-size: 12px; border-color: #666; padding: 4px 8px; }

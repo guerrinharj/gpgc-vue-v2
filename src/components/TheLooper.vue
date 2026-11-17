@@ -27,10 +27,7 @@
                 :style="{ height: `${height}%` }"
             ></div>
 
-            <div
-                class="selection"
-                :style="selectionStyle"
-            ></div>
+            <div class="selection" :style="selectionStyle"></div>
 
             <div
                 class="playhead"
@@ -76,6 +73,32 @@
             <strong>{{ formatPreciseTime(loopLength) }}</strong>
         </div>
 
+        <div class="direction-section">
+            <div class="direction-header">
+                <span>PLAYBACK DIRECTION</span>
+                <span>{{ direction.toUpperCase() }}</span>
+            </div>
+
+            <div class="direction-controls" role="group" aria-label="Playback direction">
+                <button
+                    v-for="option in directions"
+                    :key="option.value"
+                    type="button"
+                    :disabled="!hasTrack"
+                    :class="{ active: direction === option.value }"
+                    :aria-pressed="direction === option.value"
+                    @click="setDirection(option.value)"
+                >
+                    <span class="direction-icon">{{ option.icon }}</span>
+                    <span>{{ option.label }}</span>
+                </button>
+            </div>
+
+            <p class="direction-description">
+                {{ directionDescription }}
+            </p>
+        </div>
+
         <div class="actions">
             <button
                 type="button"
@@ -83,7 +106,13 @@
                 :class="{ active: loopEnabled }"
                 @click="toggleLoop"
             >
-                {{ loopEnabled ? 'STOP LOOP' : 'START LOOP' }}
+                {{
+                    preparing
+                        ? 'CANCEL'
+                        : loopEnabled
+                            ? 'STOP LOOP'
+                            : 'START LOOP'
+                }}
             </button>
 
             <button
@@ -126,39 +155,59 @@ export default {
             type: Object,
             default: null,
         },
-
         sourceUrl: {
             type: String,
             default: '',
         },
-
         trackName: {
             type: String,
             default: 'track',
         },
-
         duration: {
             type: Number,
             default: 0,
         },
-
         currentTime: {
             type: Number,
             default: 0,
+        },
+        audioContext: {
+            type: Object,
+            default: null,
+        },
+        connectLoopSource: {
+            type: Function,
+            default: null,
+        },
+        playbackRate: {
+            type: Number,
+            default: 1,
         },
     },
 
     emits: [
         'loop-change',
+        'loop-playing',
+        'loop-time',
     ],
 
-    setup(props, { emit }) {
+    setup(props, { emit, expose }) {
         const start = ref(0);
         const end = ref(0);
+        const direction = ref('forward');
         const loopEnabled = ref(false);
+        const loopPlaying = ref(false);
+        const preparing = ref(false);
         const exporting = ref(false);
         const error = ref('');
         const waveformRef = ref(null);
+        const processedTime = ref(null);
+
+        const directions = [
+            { value: 'forward', label: 'Forward', icon: '→' },
+            { value: 'reverse', label: 'Reverse', icon: '←' },
+            { value: 'pingpong', label: 'Ping-Pong', icon: '↔' },
+        ];
 
         const waveform = ref(
             Array.from({ length: 64 }, (_, index) => {
@@ -176,8 +225,22 @@ export default {
         let animationFrame = null;
         let activePointer = null;
         let activeHandle = null;
+
+        let playbackController = null;
         let exportController = null;
+        let playbackRequestId = 0;
         let exportRequestId = 0;
+
+        let decodedCache = null;
+        let decodedCacheUrl = '';
+
+        let sourceNode = null;
+        let bufferDuration = 0;
+        let playbackStartedAt = 0;
+        let playbackOffset = 0;
+        let playbackStart = 0;
+        let playbackEnd = 0;
+        let playbackDirection = 'forward';
 
         const hasTrack = computed(() => {
             return Boolean(
@@ -192,12 +255,20 @@ export default {
             return Math.max(0, end.value - start.value);
         });
 
+        const directionDescription = computed(() => {
+            switch (direction.value) {
+                case 'reverse':
+                    return 'Play the selected audio backwards.';
+                case 'pingpong':
+                    return 'Play forwards, then backwards, continuously.';
+                default:
+                    return 'Play the selected audio normally.';
+            }
+        });
+
         const selectionStyle = computed(() => {
             if (!props.duration) {
-                return {
-                    left: '0%',
-                    width: '0%',
-                };
+                return { left: '0%', width: '0%' };
             }
 
             return {
@@ -211,12 +282,13 @@ export default {
                 return 0;
             }
 
+            const time = processedTime.value === null
+                ? props.currentTime
+                : processedTime.value;
+
             return Math.max(
                 0,
-                Math.min(
-                    100,
-                    props.currentTime / props.duration * 100
-                )
+                Math.min(100, time / props.duration * 100)
             );
         });
 
@@ -248,18 +320,15 @@ export default {
             }
 
             const maximum = props.duration;
-            const minimumLength = Math.min(0.01, maximum);
+            const minimum = Math.min(0.01, maximum);
 
             start.value = Math.max(
                 0,
-                Math.min(
-                    Number(start.value) || 0,
-                    maximum - minimumLength
-                )
+                Math.min(Number(start.value) || 0, maximum - minimum)
             );
 
             end.value = Math.max(
-                start.value + minimumLength,
+                start.value + minimum,
                 Math.min(
                     Number(end.value) || maximum,
                     maximum
@@ -283,10 +352,7 @@ export default {
 
             const ratio = Math.max(
                 0,
-                Math.min(
-                    1,
-                    (event.clientX - bounds.left) / bounds.width
-                )
+                Math.min(1, (event.clientX - bounds.left) / bounds.width)
             );
 
             return ratio * props.duration;
@@ -298,17 +364,17 @@ export default {
             }
 
             const position = getPointerPosition(event);
-            const minimumLength = Math.min(0.01, props.duration);
+            const minimum = Math.min(0.01, props.duration);
 
             if (activeHandle === 'start') {
                 start.value = Math.max(
                     0,
-                    Math.min(position, end.value - minimumLength)
+                    Math.min(position, end.value - minimum)
                 );
             } else {
                 end.value = Math.min(
                     props.duration,
-                    Math.max(position, start.value + minimumLength)
+                    Math.max(position, start.value + minimum)
                 );
             }
         }
@@ -329,16 +395,13 @@ export default {
             activePointer = event.pointerId;
 
             waveformRef.value.setPointerCapture(event.pointerId);
-
             updatePointer(event);
         }
 
         function onPointerMove(event) {
-            if (activePointer !== event.pointerId) {
-                return;
+            if (activePointer === event.pointerId) {
+                updatePointer(event);
             }
-
-            updatePointer(event);
         }
 
         function onPointerUp(event) {
@@ -346,9 +409,7 @@ export default {
                 return;
             }
 
-            if (
-                waveformRef.value?.hasPointerCapture(event.pointerId)
-            ) {
+            if (waveformRef.value?.hasPointerCapture(event.pointerId)) {
                 waveformRef.value.releasePointerCapture(event.pointerId);
             }
 
@@ -363,75 +424,568 @@ export default {
             }
         }
 
-        function stopLoop() {
-            loopEnabled.value = false;
-            stopMonitoring();
-            emit('loop-change', false);
+        function stopSource() {
+            if (!sourceNode) {
+                return;
+            }
+
+            try {
+                sourceNode.stop();
+            } catch (_) {
+                // Already stopped.
+            }
+
+            sourceNode.disconnect();
+            sourceNode = null;
         }
 
-        function enforceLoop() {
-            if (!loopEnabled.value || !props.audioElement) {
+        function setPlaying(value) {
+            if (loopPlaying.value === value) {
+                return;
+            }
+
+            loopPlaying.value = value;
+            emit('loop-playing', value);
+        }
+
+        function stopLoop() {
+            playbackRequestId++;
+            playbackController?.abort();
+            playbackController = null;
+
+            const wasEnabled = loopEnabled.value;
+
+            stopMonitoring();
+            stopSource();
+
+            loopEnabled.value = false;
+            preparing.value = false;
+            processedTime.value = null;
+
+            setPlaying(false);
+
+            if (wasEnabled) {
+                emit('loop-change', false);
+            }
+        }
+
+        function enforceForward() {
+            if (
+                !loopEnabled.value ||
+                !props.audioElement ||
+                direction.value !== 'forward'
+            ) {
                 return;
             }
 
             const audio = props.audioElement;
 
             if (
-                audio.currentTime >= end.value ||
-                audio.currentTime < start.value
+                audio.currentTime < start.value ||
+                audio.currentTime >= end.value
             ) {
                 audio.currentTime = start.value;
             }
         }
 
-        function monitorLoop() {
-            if (!loopEnabled.value || !props.audioElement) {
+        function monitorForward() {
+            if (
+                !loopEnabled.value ||
+                !loopPlaying.value ||
+                direction.value !== 'forward'
+            ) {
                 stopMonitoring();
                 return;
             }
 
-            enforceLoop();
-
-            animationFrame = requestAnimationFrame(monitorLoop);
+            enforceForward();
+            animationFrame = requestAnimationFrame(monitorForward);
         }
 
-        async function toggleLoop() {
+        function currentBufferOffset() {
+            if (!props.audioContext || !bufferDuration) {
+                return playbackOffset;
+            }
+
+            if (!loopPlaying.value) {
+                return playbackOffset;
+            }
+
+            const elapsed =
+                (props.audioContext.currentTime - playbackStartedAt) *
+                Math.max(0.01, props.playbackRate);
+
+            return (playbackOffset + elapsed) % bufferDuration;
+        }
+
+        function offsetToTrackTime(offset) {
+            const length = playbackEnd - playbackStart;
+
+            if (length <= 0) {
+                return playbackStart;
+            }
+
+            if (playbackDirection === 'reverse') {
+                return playbackEnd - Math.min(offset, length);
+            }
+
+            const position = offset % (length * 2);
+
+            return position <= length
+                ? playbackStart + position
+                : playbackEnd - (position - length);
+        }
+
+        function monitorProcessed() {
+            if (
+                !loopEnabled.value ||
+                !loopPlaying.value ||
+                !sourceNode
+            ) {
+                stopMonitoring();
+                return;
+            }
+
+            const position = offsetToTrackTime(currentBufferOffset());
+
+            processedTime.value = position;
+            emit('loop-time', position);
+
+            animationFrame = requestAnimationFrame(monitorProcessed);
+        }
+
+        async function decodeAudio(url, signal) {
+            if (decodedCache && decodedCacheUrl === url) {
+                return decodedCache;
+            }
+
+            const response = await fetch(url, {
+                mode: 'cors',
+                signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(`Audio request failed: ${response.status}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+
+            if (signal?.aborted) {
+                throw new DOMException('Aborted', 'AbortError');
+            }
+
+            const Context =
+                window.AudioContext ||
+                window.webkitAudioContext;
+
+            if (!Context) {
+                throw new Error('Web Audio API unavailable.');
+            }
+
+            const context = new Context();
+
+            try {
+                const decoded = await context.decodeAudioData(arrayBuffer);
+
+                if (signal?.aborted) {
+                    throw new DOMException('Aborted', 'AbortError');
+                }
+
+                if (url === props.sourceUrl) {
+                    decodedCache = decoded;
+                    decodedCacheUrl = url;
+                }
+
+                return decoded;
+            } finally {
+                await context.close().catch(() => {});
+            }
+        }
+
+        function createLoopBuffer(
+            context,
+            decoded,
+            selectedStart,
+            selectedEnd,
+            selectedDirection
+        ) {
+            const rate = decoded.sampleRate;
+
+            const first = Math.max(
+                0,
+                Math.floor(selectedStart * rate)
+            );
+
+            const last = Math.min(
+                decoded.length,
+                Math.ceil(selectedEnd * rate)
+            );
+
+            const length = last - first;
+
+            if (length <= 0) {
+                throw new Error('Invalid loop selection.');
+            }
+
+            const channels = Math.min(2, decoded.numberOfChannels);
+
+            const outputLength = selectedDirection === 'pingpong'
+                ? Math.max(1, length * 2 - 2)
+                : length;
+
+            const output = context.createBuffer(
+                channels,
+                outputLength,
+                rate
+            );
+
+            for (let channel = 0; channel < channels; channel++) {
+                const input = decoded.getChannelData(channel);
+                const destination = output.getChannelData(channel);
+
+                if (selectedDirection === 'forward') {
+                    destination.set(input.subarray(first, last));
+                }
+
+                if (selectedDirection === 'reverse') {
+                    for (let index = 0; index < length; index++) {
+                        destination[index] = input[last - 1 - index];
+                    }
+                }
+
+                if (selectedDirection === 'pingpong') {
+                    destination.set(input.subarray(first, last));
+
+                    for (let index = 1; index < length - 1; index++) {
+                        destination[length + index - 1] =
+                            input[last - 1 - index];
+                    }
+                }
+            }
+
+            return output;
+        }
+
+        function startBufferSource(buffer, offset = 0) {
+            const context = props.audioContext;
+
+            if (!context || !props.connectLoopSource) {
+                throw new Error('Player audio graph unavailable.');
+            }
+
+            stopSource();
+
+            const source = context.createBufferSource();
+
+            source.buffer = buffer;
+            source.loop = true;
+            source.playbackRate.value = Math.max(
+                0.01,
+                props.playbackRate
+            );
+
+            props.connectLoopSource(source);
+
+            bufferDuration = buffer.duration;
+            playbackOffset = offset % bufferDuration;
+            playbackStartedAt = context.currentTime;
+
+            sourceNode = source;
+            source.start(0, playbackOffset);
+
+            setPlaying(true);
+
+            stopMonitoring();
+            monitorProcessed();
+        }
+
+        async function startProcessed(requestId, controller) {
+            const selectedStart = start.value;
+            const selectedEnd = end.value;
+            const selectedDirection = direction.value;
+
+            const decoded = await decodeAudio(
+                props.sourceUrl,
+                controller.signal
+            );
+
+            if (
+                controller.signal.aborted ||
+                requestId !== playbackRequestId
+            ) {
+                return;
+            }
+
+            const context = props.audioContext;
+
+            if (!context || !props.connectLoopSource) {
+                throw new Error('Player audio graph unavailable.');
+            }
+
+            const buffer = createLoopBuffer(
+                context,
+                decoded,
+                selectedStart,
+                selectedEnd,
+                selectedDirection
+            );
+
+            await context.resume();
+
+            if (
+                controller.signal.aborted ||
+                requestId !== playbackRequestId
+            ) {
+                return;
+            }
+
+            props.audioElement.pause();
+
+            playbackStart = selectedStart;
+            playbackEnd = selectedEnd;
+            playbackDirection = selectedDirection;
+
+            loopEnabled.value = true;
+            preparing.value = false;
+
+            emit('loop-change', true);
+
+            startBufferSource(buffer);
+        }
+
+        async function startLoop() {
             if (!hasTrack.value) {
                 return;
             }
 
-            error.value = '';
-
             if (loopEnabled.value) {
-                stopLoop();
+                await resumeLoop();
                 return;
             }
 
+            if (preparing.value) {
+                return;
+            }
+
+            error.value = '';
             normalizePoints();
 
-            const audio = props.audioElement;
+            const requestId = ++playbackRequestId;
 
-            audio.currentTime = start.value;
-            loopEnabled.value = true;
-            emit('loop-change', true);
+            if (direction.value === 'forward') {
+                try {
+                    const audio = props.audioElement;
+
+                    audio.currentTime = start.value;
+
+                    loopEnabled.value = true;
+                    emit('loop-change', true);
+
+                    await props.audioContext?.resume();
+                    await audio.play();
+
+                    if (
+                        requestId !== playbackRequestId ||
+                        !loopEnabled.value
+                    ) {
+                        return;
+                    }
+
+                    setPlaying(true);
+                    monitorForward();
+                } catch (err) {
+                    stopLoop();
+                    error.value = 'Unable to start loop playback.';
+                    console.warn('Looper playback:', err);
+                }
+
+                return;
+            }
+
+            const controller = new AbortController();
+
+            playbackController = controller;
+            preparing.value = true;
 
             try {
-                await audio.play();
+                await startProcessed(requestId, controller);
+            } catch (err) {
+                if (
+                    err.name !== 'AbortError' &&
+                    requestId === playbackRequestId
+                ) {
+                    stopLoop();
+
+                    error.value =
+                        'Unable to process audio. Check CORS permissions.';
+
+                    console.warn('Looper playback:', err);
+                }
+            } finally {
+                if (requestId === playbackRequestId) {
+                    preparing.value = false;
+                    playbackController = null;
+                }
+            }
+        }
+
+        function pauseLoop() {
+            if (!loopEnabled.value || !loopPlaying.value) {
+                return;
+            }
+
+            stopMonitoring();
+
+            if (direction.value === 'forward') {
+                props.audioElement?.pause();
+            } else {
+                playbackOffset = currentBufferOffset();
+                stopSource();
+            }
+
+            setPlaying(false);
+        }
+
+        async function resumeLoop() {
+            if (!loopEnabled.value || loopPlaying.value) {
+                return;
+            }
+
+            if (direction.value === 'forward') {
+                try {
+                    await props.audioContext?.resume();
+                    await props.audioElement.play();
+
+                    if (!loopEnabled.value) {
+                        return;
+                    }
+
+                    setPlaying(true);
+                    monitorForward();
+                } catch (err) {
+                    error.value = 'Unable to resume playback.';
+                    console.warn('Looper resume:', err);
+                }
+
+                return;
+            }
+
+            if (!decodedCache || !props.audioContext) {
+                stopLoop();
+                await startLoop();
+                return;
+            }
+
+            try {
+                const buffer = createLoopBuffer(
+                    props.audioContext,
+                    decodedCache,
+                    playbackStart,
+                    playbackEnd,
+                    playbackDirection
+                );
+
+                await props.audioContext.resume();
 
                 if (loopEnabled.value) {
-                    stopMonitoring();
-                    monitorLoop();
+                    startBufferSource(buffer, playbackOffset);
                 }
             } catch (err) {
+                error.value = 'Unable to resume loop.';
+                console.warn('Looper resume:', err);
+            }
+        }
+
+        function seekLoop(time) {
+            if (!loopEnabled.value) {
+                return false;
+            }
+
+            const target = Math.max(
+                start.value,
+                Math.min(end.value, time)
+            );
+
+            if (direction.value === 'forward') {
+                const audio = props.audioElement;
+
+                if (!audio) {
+                    return false;
+                }
+
+                audio.currentTime = target;
+                return true;
+            }
+
+            const length = playbackEnd - playbackStart;
+
+            if (length <= 0) {
+                return false;
+            }
+
+            const offset = direction.value === 'reverse'
+                ? playbackEnd - target
+                : target - playbackStart;
+
+            playbackOffset = Math.max(
+                0,
+                Math.min(offset, bufferDuration)
+            );
+
+            processedTime.value = target;
+            emit('loop-time', target);
+
+            if (loopPlaying.value) {
+                const buffer = sourceNode?.buffer;
+
+                if (buffer) {
+                    startBufferSource(buffer, playbackOffset);
+                }
+            }
+
+            return true;
+        }
+
+        function updateLoopRate() {
+            if (!sourceNode || !props.audioContext) {
+                return;
+            }
+
+            playbackOffset = currentBufferOffset();
+            playbackStartedAt = props.audioContext.currentTime;
+
+            sourceNode.playbackRate.value = Math.max(
+                0.01,
+                props.playbackRate
+            );
+        }
+
+        function toggleLoop() {
+            if (loopEnabled.value || preparing.value) {
                 stopLoop();
-                error.value = 'Unable to start loop playback.';
-                console.warn('Looper playback:', err);
+            } else {
+                void startLoop();
+            }
+        }
+
+        function setDirection(value) {
+            if (direction.value === value) {
+                return;
+            }
+
+            const restart = loopEnabled.value || preparing.value;
+
+            stopLoop();
+            direction.value = value;
+            error.value = '';
+
+            if (restart) {
+                void startLoop();
             }
         }
 
         function resetLoop() {
             stopLoop();
-
             start.value = 0;
             end.value = props.duration || 0;
             error.value = '';
@@ -439,10 +993,7 @@ export default {
 
         function writeString(view, offset, value) {
             for (let index = 0; index < value.length; index++) {
-                view.setUint8(
-                    offset + index,
-                    value.charCodeAt(index)
-                );
+                view.setUint8(offset + index, value.charCodeAt(index));
             }
         }
 
@@ -454,8 +1005,7 @@ export default {
 
             const sampleRate = audioBuffer.sampleRate;
             const samples = audioBuffer.length;
-            const bytesPerSample = 2;
-            const blockAlign = channels * bytesPerSample;
+            const blockAlign = channels * 2;
             const dataSize = samples * blockAlign;
 
             const buffer = new ArrayBuffer(44 + dataSize);
@@ -470,11 +1020,7 @@ export default {
             view.setUint16(20, 1, true);
             view.setUint16(22, channels, true);
             view.setUint32(24, sampleRate, true);
-            view.setUint32(
-                28,
-                sampleRate * blockAlign,
-                true
-            );
+            view.setUint32(28, sampleRate * blockAlign, true);
             view.setUint16(32, blockAlign, true);
             view.setUint16(34, 16, true);
 
@@ -510,10 +1056,7 @@ export default {
                 }
             }
 
-            return new Blob(
-                [buffer],
-                { type: 'audio/wav' }
-            );
+            return new Blob([buffer], { type: 'audio/wav' });
         }
 
         async function exportLoop() {
@@ -523,10 +1066,11 @@ export default {
 
             normalizePoints();
 
-            const sourceUrl = props.sourceUrl;
-            const trackName = props.trackName;
             const selectedStart = start.value;
             const selectedEnd = end.value;
+            const selectedDirection = direction.value;
+            const sourceUrl = props.sourceUrl;
+            const trackName = props.trackName;
 
             const requestId = ++exportRequestId;
             const controller = new AbortController();
@@ -535,38 +1079,10 @@ export default {
             exporting.value = true;
             error.value = '';
 
-            let context = null;
-
             try {
-                const response = await fetch(sourceUrl, {
-                    mode: 'cors',
-                    signal: controller.signal,
-                });
-
-                if (!response.ok) {
-                    throw new Error(
-                        `Audio request failed: ${response.status}`
-                    );
-                }
-
-                const arrayBuffer = await response.arrayBuffer();
-
-                if (controller.signal.aborted) {
-                    return;
-                }
-
-                const AudioContextClass =
-                    window.AudioContext ||
-                    window.webkitAudioContext;
-
-                if (!AudioContextClass) {
-                    throw new Error('Web Audio API unavailable.');
-                }
-
-                context = new AudioContextClass();
-
-                const decoded = await context.decodeAudioData(
-                    arrayBuffer
+                const decoded = await decodeAudio(
+                    sourceUrl,
+                    controller.signal
                 );
 
                 if (
@@ -576,77 +1092,54 @@ export default {
                     return;
                 }
 
-                const sampleRate = decoded.sampleRate;
+                const Context =
+                    window.AudioContext ||
+                    window.webkitAudioContext;
 
-                const startSample = Math.max(
-                    0,
-                    Math.floor(selectedStart * sampleRate)
-                );
+                const context = new Context();
 
-                const endSample = Math.min(
-                    decoded.length,
-                    Math.ceil(selectedEnd * sampleRate)
-                );
-
-                const length = endSample - startSample;
-
-                if (length <= 0) {
-                    throw new Error('Invalid loop selection.');
-                }
-
-                const channels = Math.min(
-                    2,
-                    decoded.numberOfChannels
-                );
-
-                const output = context.createBuffer(
-                    channels,
-                    length,
-                    sampleRate
-                );
-
-                for (let channel = 0; channel < channels; channel++) {
-                    const source = decoded.getChannelData(channel);
-                    const destination = output.getChannelData(channel);
-
-                    destination.set(
-                        source.subarray(startSample, endSample)
+                try {
+                    const output = createLoopBuffer(
+                        context,
+                        decoded,
+                        selectedStart,
+                        selectedEnd,
+                        selectedDirection
                     );
+
+                    const wav = encodeWav(output);
+                    const url = URL.createObjectURL(wav);
+
+                    const filename = trackName
+                        .replace(/[^a-z0-9-_ ]/gi, '')
+                        .trim()
+                        .replace(/\s+/g, '-')
+                        .toLowerCase() || 'track';
+
+                    const suffix = selectedDirection === 'forward'
+                        ? 'loop'
+                        : `loop-${selectedDirection}`;
+
+                    const link = document.createElement('a');
+
+                    link.href = url;
+                    link.download = `${filename}-${suffix}.wav`;
+
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } finally {
+                    await context.close().catch(() => {});
                 }
-
-                const wav = encodeWav(output);
-                const objectUrl = URL.createObjectURL(wav);
-
-                const filename = trackName
-                    .replace(/[^a-z0-9-_ ]/gi, '')
-                    .trim()
-                    .replace(/\s+/g, '-')
-                    .toLowerCase() || 'track';
-
-                const link = document.createElement('a');
-
-                link.href = objectUrl;
-                link.download = `${filename}-loop.wav`;
-
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-
-                setTimeout(() => {
-                    URL.revokeObjectURL(objectUrl);
-                }, 1000);
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     console.error('Loop export:', err);
-
                     error.value =
-                        'Unable to export WAV. Check audio access and CORS permissions.';
+                        'Unable to export WAV. Check audio access and CORS.';
                 }
             } finally {
-                if (context) {
-                    await context.close().catch(() => {});
-                }
-
                 if (exportController === controller) {
                     exportController = null;
                 }
@@ -663,8 +1156,13 @@ export default {
                 exportRequestId++;
                 exportController?.abort();
                 exporting.value = false;
+
+                decodedCache = null;
+                decodedCacheUrl = '';
+
                 resetLoop();
-            }
+            },
+            { flush: 'sync' }
         );
 
         watch(
@@ -680,25 +1178,50 @@ export default {
             { immediate: true }
         );
 
-        watch(
-            [start, end],
-            () => {
-                if (loopEnabled.value) {
-                    enforceLoop();
-                }
+        watch([start, end], () => {
+            if (!loopEnabled.value) {
+                return;
             }
+
+            if (direction.value === 'forward') {
+                enforceForward();
+            } else {
+                stopLoop();
+                void startLoop();
+            }
+        });
+
+        watch(
+            () => props.playbackRate,
+            updateLoopRate
         );
 
         onBeforeUnmount(() => {
             stopLoop();
+
             exportRequestId++;
             exportController?.abort();
+
+            decodedCache = null;
+        });
+
+        expose({
+            startLoop,
+            stopLoop,
+            pauseLoop,
+            resumeLoop,
+            seekLoop,
+            updateLoopRate,
         });
 
         return {
             start,
             end,
+            direction,
+            directions,
+            directionDescription,
             loopEnabled,
+            preparing,
             exporting,
             error,
             waveform,
@@ -715,6 +1238,7 @@ export default {
             onPointerMove,
             onPointerUp,
             toggleLoop,
+            setDirection,
             resetLoop,
             exportLoop,
         };
@@ -868,6 +1392,80 @@ export default {
     font-variant-numeric: tabular-nums;
 }
 
+.direction-section {
+    border-top: 1px solid #333;
+    margin-top: 22px;
+    padding-top: 16px;
+}
+
+.direction-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+    color: #999;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+}
+
+.direction-header span:last-child {
+    color: #fff;
+}
+
+.direction-controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.direction-controls button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 64px;
+    min-width: 0;
+    padding: 10px 4px;
+    background: #000;
+    border: 1px solid #555;
+    border-radius: 0;
+    color: #aaa;
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+}
+
+.direction-controls button:hover:not(:disabled) {
+    border-color: #fff;
+    color: #fff;
+}
+
+.direction-controls button.active {
+    background: #fff;
+    border-color: #fff;
+    color: #000;
+}
+
+.direction-controls button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.direction-icon {
+    font-family: Arial, sans-serif;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.direction-description {
+    margin: 10px 0 0;
+    color: #777;
+    font-size: 10px;
+    line-height: 1.5;
+}
+
 .actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -901,7 +1499,11 @@ export default {
 .reset-button {
     display: block;
     margin-top: 15px;
+    padding: 0;
+    background: transparent;
+    border: 0;
     color: #aaa;
+    font: inherit;
     font-size: 11px;
     text-decoration: underline;
     text-underline-offset: 3px;
@@ -932,6 +1534,19 @@ export default {
     .point-controls input {
         padding: 7px;
         font-size: 11px;
+    }
+
+    .direction-controls {
+        gap: 4px;
+    }
+
+    .direction-controls button {
+        min-height: 58px;
+        font-size: 9px;
+    }
+
+    .direction-icon {
+        font-size: 21px;
     }
 }
 </style>

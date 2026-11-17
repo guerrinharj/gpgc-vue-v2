@@ -8,8 +8,8 @@
             @loadedmetadata="onMetadata"
             @timeupdate="onTime"
             @ended="onEnded"
-            @play="playing = true"
-            @pause="playing = false"
+            @play="onAudioPlay"
+            @pause="onAudioPause"
             @error="onAudioError"
         ></audio>
 
@@ -132,7 +132,11 @@
             id="audio-tools-panel"
             class="audio-tools-panel"
         >
-            <div class="tool-tabs" role="group" aria-label="Audio tools">
+            <div
+                class="tool-tabs"
+                role="group"
+                aria-label="Audio tools"
+            >
                 <button
                     type="button"
                     class="tool-tab"
@@ -155,7 +159,6 @@
                         <circle cx="9" cy="7" r="2.5" fill="currentColor" stroke="none" />
                         <circle cx="16" cy="17" r="2.5" fill="currentColor" stroke="none" />
                     </svg>
-
                     <span>Sound</span>
                 </button>
 
@@ -181,7 +184,6 @@
                         <line x1="16" y1="6" x2="16" y2="18" />
                         <line x1="20" y1="9" x2="20" y2="15" />
                     </svg>
-
                     <span>Stems</span>
                 </button>
 
@@ -207,7 +209,6 @@
                         <path d="M7 22l-4-4 4-4" />
                         <path d="M21 13v2a3 3 0 0 1-3 3H3" />
                     </svg>
-
                     <span>Looper</span>
                 </button>
             </div>
@@ -266,7 +267,13 @@
                         <span class="control-heading">
                             <span>Pan</span>
                             <output>
-                                {{ pan < 0 ? `L ${-pan}` : pan > 0 ? `R ${pan}` : 'Center' }}
+                                {{
+                                    pan < 0
+                                        ? `L ${-pan}`
+                                        : pan > 0
+                                            ? `R ${pan}`
+                                            : 'Center'
+                                }}
                             </output>
                         </span>
 
@@ -329,10 +336,7 @@
                     <label class="speed-control">
                         <span class="speed-heading">
                             <span>Playback speed</span>
-
-                            <output>
-                                {{ (speed / 100).toFixed(2) }}×
-                            </output>
+                            <output>{{ playbackRate.toFixed(2) }}×</output>
                         </span>
 
                         <input
@@ -366,9 +370,10 @@
                     </div>
 
                     <p class="vinyl-description">
-                        {{ vinylMode
-                            ? 'Speed and pitch move together, like a turntable.'
-                            : 'Speed changes while pitch correction remains enabled when supported.'
+                        {{
+                            vinylMode
+                                ? 'Speed and pitch move together, like a turntable.'
+                                : 'Pitch correction is available for normal playback when supported. Reverse and Ping-Pong use vinyl-style speed.'
                         }}
                     </p>
                 </div>
@@ -407,12 +412,18 @@
                 class="tool-content looper-content"
             >
                 <TheLooper
+                    ref="looperRef"
                     :audio-element="audioRef"
                     :source-url="currentTrack?.url || ''"
                     :track-name="currentTrack?.name || 'track'"
                     :duration="duration"
                     :current-time="currentTime"
+                    :audio-context="audioContext"
+                    :connect-loop-source="connectLoopSource"
+                    :playback-rate="playbackRate"
                     @loop-change="onLoopChange"
+                    @loop-playing="onLoopPlaying"
+                    @loop-time="onLoopTime"
                 />
             </div>
         </div>
@@ -432,14 +443,12 @@ import {
     computed,
     nextTick,
     onMounted,
+    onBeforeUnmount,
     ref,
     watch,
-    onBeforeUnmount,
 } from 'vue';
 
-import {
-    useStore,
-} from 'vuex';
+import { useStore } from 'vuex';
 
 import StemSeparator from './StemSeparator.vue';
 import TheLooper from './TheLooper.vue';
@@ -469,11 +478,14 @@ export default {
         const shuffleError = ref('');
 
         const audioRef = ref(null);
+        const looperRef = ref(null);
+
         const playing = ref(false);
+        const loopActive = ref(false);
+        const loopPlaying = ref(false);
 
         const showAudioTools = ref(false);
         const activeTool = ref(null);
-        const loopActive = ref(false);
 
         const currentTime = ref(0);
         const duration = ref(0);
@@ -488,14 +500,13 @@ export default {
 
         const originalBpm = ref(null);
         const bpmLoading = ref(false);
-
-        let bpmRequestId = 0;
-        let trackRequestId = 0;
-
         const audioError = ref('');
 
-        let audioContext = null;
+        const audioContext = ref(null);
+
         let graph = null;
+        let bpmRequestId = 0;
+        let trackRequestId = 0;
 
         function toggleAudioTools() {
             showAudioTools.value = !showAudioTools.value;
@@ -506,21 +517,45 @@ export default {
         }
 
         function toggleTool(tool) {
-            if (activeTool.value === tool) {
-                activeTool.value = null;
-            } else {
-                activeTool.value = tool;
-            }
+            activeTool.value = activeTool.value === tool
+                ? null
+                : tool;
         }
 
         function onLoopChange(active) {
             loopActive.value = active;
+
+            if (!active) {
+                loopPlaying.value = false;
+                playing.value = !audioRef.value?.paused;
+                currentTime.value = audioRef.value?.currentTime || 0;
+            }
+        }
+
+        function onLoopPlaying(active) {
+            loopPlaying.value = active;
+            playing.value = active;
+        }
+
+        function onLoopTime(time) {
+            if (loopActive.value) {
+                currentTime.value = time;
+            }
+        }
+
+        function stopActiveLoop() {
+            looperRef.value?.stopLoop();
+
+            loopActive.value = false;
+            loopPlaying.value = false;
         }
 
         async function startShuffle() {
             if (shuffleLoading.value) {
                 return;
             }
+
+            stopActiveLoop();
 
             shuffleLoading.value = true;
             shuffleError.value = '';
@@ -546,7 +581,10 @@ export default {
         });
 
         const pitchSemitones = computed(() => {
-            return vinylMode.value
+            const processed = loopActive.value &&
+                audioRef.value?.paused;
+
+            return (vinylMode.value || processed)
                 ? 12 * Math.log2(playbackRate.value)
                 : 0;
         });
@@ -566,10 +604,9 @@ export default {
                 return '—';
             }
 
-            const adjustedBpm =
-                originalBpm.value * playbackRate.value;
-
-            return `${Math.round(adjustedBpm)} BPM`;
+            return `${Math.round(
+                originalBpm.value * playbackRate.value
+            )} BPM`;
         });
 
         function rangeStyle(value, min, max) {
@@ -577,7 +614,7 @@ export default {
                 0,
                 Math.min(
                     100,
-                    ((value - min) / (max - min)) * 100
+                    (value - min) / (max - min) * 100
                 )
             );
 
@@ -598,9 +635,7 @@ export default {
 
         const progress = computed(() => {
             return duration.value
-                ? Math.round(
-                    currentTime.value / duration.value * 1000
-                )
+                ? Math.round(currentTime.value / duration.value * 1000)
                 : 0;
         });
 
@@ -646,14 +681,28 @@ export default {
         }
 
         function onTime() {
-            currentTime.value =
-                audioRef.value?.currentTime || 0;
+            if (loopActive.value && audioRef.value?.paused) {
+                return;
+            }
+
+            currentTime.value = audioRef.value?.currentTime || 0;
+        }
+
+        function onAudioPlay() {
+            if (!loopActive.value || !audioRef.value?.paused) {
+                playing.value = true;
+            }
+        }
+
+        function onAudioPause() {
+            if (!loopPlaying.value) {
+                playing.value = false;
+            }
         }
 
         function onAudioError() {
             if (currentTrack.value) {
-                audioError.value =
-                    'Unable to play this audio file.';
+                audioError.value = 'Unable to play this audio file.';
             }
 
             playing.value = false;
@@ -664,12 +713,16 @@ export default {
                 return;
             }
 
+            if (loopActive.value) {
+                await looperRef.value?.resumeLoop();
+                return;
+            }
+
             audioError.value = '';
 
             try {
-                await audioContext?.resume();
+                await audioContext.value?.resume();
                 await audioRef.value.play();
-
                 playing.value = true;
             } catch (error) {
                 playing.value = false;
@@ -686,18 +739,30 @@ export default {
                 return;
             }
 
+            if (loopActive.value) {
+                if (loopPlaying.value) {
+                    looperRef.value?.pauseLoop();
+                } else {
+                    void looperRef.value?.resumeLoop();
+                }
+
+                return;
+            }
+
             if (audioRef.value.paused) {
-                play();
+                void play();
             } else {
                 audioRef.value.pause();
             }
         }
 
         function previous() {
+            stopActiveLoop();
             store.dispatch('playPreviousTrack');
         }
 
         function next() {
+            stopActiveLoop();
             store.dispatch('playNextTrack');
         }
 
@@ -722,20 +787,28 @@ export default {
                 return;
             }
 
-            const position =
-                Number(event.target.value) / 1000;
+            const position = Number(event.target.value) / 1000;
+            const time = position * duration.value;
 
-            audioRef.value.currentTime =
-                position * duration.value;
+            if (loopActive.value) {
+                const handled = looperRef.value?.seekLoop(time);
 
-            currentTime.value =
-                audioRef.value.currentTime;
+                if (handled) {
+                    return;
+                }
+            }
+
+            audioRef.value.currentTime = time;
+            currentTime.value = time;
         }
 
         function updateVolume() {
             if (audioRef.value) {
-                audioRef.value.volume =
-                    volume.value / 100;
+                audioRef.value.volume = volume.value / 100;
+            }
+
+            if (graph) {
+                graph.masterGain.gain.value = volume.value / 100;
             }
         }
 
@@ -761,6 +834,8 @@ export default {
             }
 
             audio.playbackRate = playbackRate.value;
+
+            looperRef.value?.updateLoopRate();
         }
 
         function setVinylMode(enabled) {
@@ -769,8 +844,12 @@ export default {
         }
 
         function ensureAudioGraph() {
-            if (graph || !audioRef.value) {
-                return;
+            if (graph) {
+                return graph;
+            }
+
+            if (!audioRef.value) {
+                return null;
             }
 
             const Context =
@@ -778,72 +857,92 @@ export default {
                 window.webkitAudioContext;
 
             if (!Context) {
-                return;
+                return null;
             }
 
             try {
-                audioContext = new Context();
+                const context = new Context();
+                audioContext.value = context;
 
-                const source =
-                    audioContext.createMediaElementSource(
-                        audioRef.value
-                    );
+                const mediaSource =
+                    context.createMediaElementSource(audioRef.value);
 
-                const bassFilter =
-                    audioContext.createBiquadFilter();
-
+                const bassFilter = context.createBiquadFilter();
                 bassFilter.type = 'lowshelf';
                 bassFilter.frequency.value = 200;
 
-                const trebleFilter =
-                    audioContext.createBiquadFilter();
-
+                const trebleFilter = context.createBiquadFilter();
                 trebleFilter.type = 'highshelf';
                 trebleFilter.frequency.value = 3400;
 
-                const stereoPan =
-                    audioContext.createStereoPanner();
+                const stereoPan = context.createStereoPanner();
 
-                const delay =
-                    audioContext.createDelay(0.8);
-
+                const delay = context.createDelay(0.8);
                 delay.delayTime.value = 0.28;
 
-                const feedback =
-                    audioContext.createGain();
-
+                const feedback = context.createGain();
                 feedback.gain.value = 0.25;
 
-                const wet =
-                    audioContext.createGain();
-
+                const wet = context.createGain();
                 wet.gain.value = 0;
 
-                source.connect(bassFilter);
+                const masterGain = context.createGain();
+                masterGain.gain.value = volume.value / 100;
+
+                // Both normal playback and processed loops enter here.
+                const input = context.createGain();
+
+                input.connect(bassFilter);
                 bassFilter.connect(trebleFilter);
                 trebleFilter.connect(stereoPan);
-                stereoPan.connect(audioContext.destination);
+                stereoPan.connect(masterGain);
 
                 trebleFilter.connect(delay);
                 delay.connect(feedback);
                 feedback.connect(delay);
                 delay.connect(wet);
-                wet.connect(audioContext.destination);
+                wet.connect(masterGain);
+
+                masterGain.connect(context.destination);
+
+                mediaSource.connect(input);
 
                 graph = {
+                    input,
+                    mediaSource,
                     bassFilter,
                     trebleFilter,
                     stereoPan,
                     wet,
+                    masterGain,
                 };
 
-                audioContext.resume().catch(() => {});
+                // The graph handles volume for both audio sources.
+                // Keep the media element at unity gain to avoid
+                // applying volume twice.
+                audioRef.value.volume = 1;
+
+                context.resume().catch(() => {});
+
+                return graph;
             } catch (error) {
                 console.warn(
                     'Web Audio filters unavailable:',
                     error
                 );
+
+                return null;
             }
+        }
+
+        function connectLoopSource(source) {
+            const currentGraph = ensureAudioGraph();
+
+            if (!currentGraph) {
+                throw new Error('Audio graph unavailable.');
+            }
+
+            source.connect(currentGraph.input);
         }
 
         function updateEffects() {
@@ -870,6 +969,8 @@ export default {
         }
 
         onMounted(() => {
+            ensureAudioGraph();
+            updateEffects();
             updateVolume();
             applyPlaybackRate();
         });
@@ -879,7 +980,7 @@ export default {
             async url => {
                 const requestId = ++trackRequestId;
 
-                loopActive.value = false;
+                stopActiveLoop();
                 analyzeBpm(url);
 
                 await nextTick();
@@ -924,8 +1025,10 @@ export default {
             trackRequestId++;
             bpmRequestId++;
 
+            stopActiveLoop();
             audioRef.value?.pause();
-            audioContext?.close().catch(() => {});
+
+            audioContext.value?.close().catch(() => {});
         });
 
         return {
@@ -935,6 +1038,8 @@ export default {
             shuffleError,
             startShuffle,
             audioRef,
+            looperRef,
+            audioContext,
             playing,
             showAudioTools,
             activeTool,
@@ -942,6 +1047,9 @@ export default {
             toggleAudioTools,
             toggleTool,
             onLoopChange,
+            onLoopPlaying,
+            onLoopTime,
+            connectLoopSource,
             currentTime,
             duration,
             volume,
@@ -951,6 +1059,7 @@ export default {
             echo,
             speed,
             vinylMode,
+            playbackRate,
             audioError,
             progress,
             pitchLabel,
@@ -959,6 +1068,8 @@ export default {
             formatTime,
             onMetadata,
             onTime,
+            onAudioPlay,
+            onAudioPause,
             onAudioError,
             onEnded,
             seek,
