@@ -211,8 +211,8 @@
                     >
                         <strong>{{ release.name }}</strong>
 
-                        <span v-if="release.release_type">
-                            {{ release.release_type }}
+                        <span v-if="release.year">
+                            {{ release.year }}
                         </span>
                     </button>
 
@@ -571,7 +571,7 @@ export default {
     width: min(820px, 100%);
     background: #000;
     color: #fff;
-    border: 1px solid #fff;
+    border: 1px solid #fff2;
     padding: 50px 43px 40px;
     text-align: left;
     outline: 0;
