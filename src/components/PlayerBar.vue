@@ -97,29 +97,23 @@
             <span>{{ formatTime(duration) }}</span>
         </div>
 
-        <div class="player-line lower-line">
+        <div class="tools-bar">
             <button
                 type="button"
-                :aria-expanded="showEffects"
-                aria-controls="player-effects"
-                @click="showEffects = !showEffects"
+                class="tools-toggle"
+                :aria-expanded="showAudioTools"
+                aria-controls="audio-tools-panel"
+                @click="toggleAudioTools"
             >
-                Sound settings {{ showEffects ? '−' : '+' }}
-            </button>
-
-            <button
-                type="button"
-                class="looper-toggle"
-                :class="{ active: showLooper || loopActive }"
-                :aria-expanded="showLooper"
-                aria-controls="player-looper"
-                @click="showLooper = !showLooper"
-            >
-                Looper {{ showLooper ? '−' : '+' }}
+                <span class="tools-icon">☷</span>
+                <span>Audio Tools</span>
+                <span class="tools-chevron">
+                    {{ showAudioTools ? '⌃' : '⌄' }}
+                </span>
             </button>
 
             <label for="player-volume" class="volume-label">
-                Volume
+                <span>Volume</span>
 
                 <input
                     id="player-volume"
@@ -134,176 +128,293 @@
         </div>
 
         <div
-            v-show="showLooper"
-            id="player-looper"
-            class="looper-container"
+            v-show="showAudioTools"
+            id="audio-tools-panel"
+            class="audio-tools-panel"
         >
-            <TheLooper
-                :audio-element="audioRef"
-                :source-url="currentTrack?.url || ''"
-                :track-name="currentTrack?.name || 'track'"
-                :duration="duration"
-                :current-time="currentTime"
-                @loop-change="onLoopChange"
-            />
-        </div>
-
-        <div
-            v-show="showEffects"
-            id="player-effects"
-            class="player-effects"
-        >
-            <label>
-                Bass
-                <output>{{ bass }} dB</output>
-
-                <input
-                    v-model.number="bass"
-                    type="range"
-                    min="-12"
-                    max="12"
-                    :style="rangeStyle(bass, -12, 12)"
-                    @input="updateEffects"
-                />
-            </label>
-
-            <label>
-                Treble
-                <output>{{ treble }} dB</output>
-
-                <input
-                    v-model.number="treble"
-                    type="range"
-                    min="-12"
-                    max="12"
-                    :style="rangeStyle(treble, -12, 12)"
-                    @input="updateEffects"
-                />
-            </label>
-
-            <label>
-                Pan
-
-                <output>
-                    {{ pan < 0 ? `L ${-pan}` : pan > 0 ? `R ${pan}` : 'Center' }}
-                </output>
-
-                <input
-                    v-model.number="pan"
-                    type="range"
-                    min="-100"
-                    max="100"
-                    :style="rangeStyle(pan, -100, 100)"
-                    @input="updateEffects"
-                />
-            </label>
-
-            <label>
-                Echo
-                <output>{{ echo }}%</output>
-
-                <input
-                    v-model.number="echo"
-                    type="range"
-                    min="0"
-                    max="70"
-                    :style="rangeStyle(echo, 0, 70)"
-                    @input="updateEffects"
-                />
-            </label>
-
-            <div class="vinyl-section">
-                <div class="vinyl-header">
-                    <span>Speed / Pitch</span>
-
-                    <span class="vinyl-mode">
-                        {{ vinylMode ? 'VINYL' : 'INDEPENDENT' }}
-                    </span>
-                </div>
-
-                <div class="mode-switch">
-                    <button
-                        type="button"
-                        :class="{ active: !vinylMode }"
-                        :aria-pressed="!vinylMode"
-                        @click="setVinylMode(false)"
+            <div class="tool-tabs" role="group" aria-label="Audio tools">
+                <button
+                    type="button"
+                    class="tool-tab"
+                    :class="{ active: activeTool === 'sound' }"
+                    :aria-pressed="activeTool === 'sound'"
+                    aria-controls="player-effects"
+                    @click="toggleTool('sound')"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
                     >
-                        Independent
-                    </button>
+                        <line x1="4" y1="7" x2="20" y2="7" />
+                        <line x1="4" y1="17" x2="20" y2="17" />
+                        <circle cx="9" cy="7" r="2.5" fill="currentColor" stroke="none" />
+                        <circle cx="16" cy="17" r="2.5" fill="currentColor" stroke="none" />
+                    </svg>
+
+                    <span>Sound</span>
+                </button>
+
+                <button
+                    type="button"
+                    class="tool-tab"
+                    :class="{ active: activeTool === 'stems' }"
+                    :aria-pressed="activeTool === 'stems'"
+                    aria-controls="player-stems"
+                    @click="toggleTool('stems')"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        aria-hidden="true"
+                    >
+                        <line x1="4" y1="10" x2="4" y2="14" />
+                        <line x1="8" y1="5" x2="8" y2="19" />
+                        <line x1="12" y1="2" x2="12" y2="22" />
+                        <line x1="16" y1="6" x2="16" y2="18" />
+                        <line x1="20" y1="9" x2="20" y2="15" />
+                    </svg>
+
+                    <span>Stems</span>
+                </button>
+
+                <button
+                    type="button"
+                    class="tool-tab"
+                    :class="{ active: activeTool === 'looper' }"
+                    :aria-pressed="activeTool === 'looper'"
+                    aria-controls="player-looper"
+                    @click="toggleTool('looper')"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path d="M17 2l4 4-4 4" />
+                        <path d="M3 11V9a3 3 0 0 1 3-3h15" />
+                        <path d="M7 22l-4-4 4-4" />
+                        <path d="M21 13v2a3 3 0 0 1-3 3H3" />
+                    </svg>
+
+                    <span>Looper</span>
+                </button>
+            </div>
+
+            <div
+                v-show="activeTool === 'sound'"
+                id="player-effects"
+                class="tool-content"
+            >
+                <div class="tool-heading">
+                    <strong>Sound Settings</strong>
 
                     <button
                         type="button"
-                        :class="{ active: vinylMode }"
-                        :aria-pressed="vinylMode"
-                        @click="setVinylMode(true)"
+                        class="heading-action"
+                        @click="resetEffects"
                     >
-                        Vinyl
+                        Reset
                     </button>
                 </div>
 
-                <label class="speed-control">
-                    <span class="speed-heading">
-                        <span>Speed</span>
+                <div class="player-effects">
+                    <label>
+                        <span class="control-heading">
+                            <span>Bass</span>
+                            <output>{{ bass }} dB</output>
+                        </span>
 
-                        <output>
-                            {{ (speed / 100).toFixed(2) }}×
-                        </output>
-                    </span>
+                        <input
+                            v-model.number="bass"
+                            type="range"
+                            min="-12"
+                            max="12"
+                            :style="rangeStyle(bass, -12, 12)"
+                            @input="updateEffects"
+                        />
+                    </label>
 
-                    <input
-                        v-model.number="speed"
-                        type="range"
-                        min="50"
-                        max="150"
-                        step="1"
-                        aria-label="Playback speed"
-                        :style="rangeStyle(speed, 50, 150)"
-                        @input="updateEffects"
-                    />
-                </label>
+                    <label>
+                        <span class="control-heading">
+                            <span>Treble</span>
+                            <output>{{ treble }} dB</output>
+                        </span>
 
-                <div class="speed-markers">
-                    <span>0.50×</span>
-                    <span>1.00×</span>
-                    <span>1.50×</span>
+                        <input
+                            v-model.number="treble"
+                            type="range"
+                            min="-12"
+                            max="12"
+                            :style="rangeStyle(treble, -12, 12)"
+                            @input="updateEffects"
+                        />
+                    </label>
+
+                    <label>
+                        <span class="control-heading">
+                            <span>Pan</span>
+                            <output>
+                                {{ pan < 0 ? `L ${-pan}` : pan > 0 ? `R ${pan}` : 'Center' }}
+                            </output>
+                        </span>
+
+                        <input
+                            v-model.number="pan"
+                            type="range"
+                            min="-100"
+                            max="100"
+                            :style="rangeStyle(pan, -100, 100)"
+                            @input="updateEffects"
+                        />
+                    </label>
+
+                    <label>
+                        <span class="control-heading">
+                            <span>Echo</span>
+                            <output>{{ echo }}%</output>
+                        </span>
+
+                        <input
+                            v-model.number="echo"
+                            type="range"
+                            min="0"
+                            max="70"
+                            :style="rangeStyle(echo, 0, 70)"
+                            @input="updateEffects"
+                        />
+                    </label>
                 </div>
 
-                <div class="pitch-readout">
-                    <div>
-                        <span>Pitch</span>
-                        <strong>{{ pitchLabel }}</strong>
+                <div class="vinyl-section">
+                    <div class="vinyl-header">
+                        <strong>Speed / Pitch</strong>
+
+                        <span class="vinyl-mode">
+                            {{ vinylMode ? 'VINYL' : 'INDEPENDENT' }}
+                        </span>
                     </div>
 
-                    <div>
-                        <span>BPM</span>
-                        <strong>{{ bpmLabel }}</strong>
+                    <div class="mode-switch">
+                        <button
+                            type="button"
+                            :class="{ active: !vinylMode }"
+                            :aria-pressed="!vinylMode"
+                            @click="setVinylMode(false)"
+                        >
+                            Independent
+                        </button>
+
+                        <button
+                            type="button"
+                            :class="{ active: vinylMode }"
+                            :aria-pressed="vinylMode"
+                            @click="setVinylMode(true)"
+                        >
+                            Vinyl
+                        </button>
                     </div>
+
+                    <label class="speed-control">
+                        <span class="speed-heading">
+                            <span>Playback speed</span>
+
+                            <output>
+                                {{ (speed / 100).toFixed(2) }}×
+                            </output>
+                        </span>
+
+                        <input
+                            v-model.number="speed"
+                            type="range"
+                            min="50"
+                            max="150"
+                            step="1"
+                            aria-label="Playback speed"
+                            :style="rangeStyle(speed, 50, 150)"
+                            @input="updateEffects"
+                        />
+                    </label>
+
+                    <div class="speed-markers">
+                        <span>0.50×</span>
+                        <span>1.00×</span>
+                        <span>1.50×</span>
+                    </div>
+
+                    <div class="pitch-readout">
+                        <div>
+                            <span>PITCH</span>
+                            <strong>{{ pitchLabel }}</strong>
+                        </div>
+
+                        <div>
+                            <span>BPM</span>
+                            <strong>{{ bpmLabel }}</strong>
+                        </div>
+                    </div>
+
+                    <p class="vinyl-description">
+                        {{ vinylMode
+                            ? 'Speed and pitch move together, like a turntable.'
+                            : 'Speed changes while pitch correction remains enabled when supported.'
+                        }}
+                    </p>
+                </div>
+            </div>
+
+            <div
+                v-show="activeTool === 'stems'"
+                id="player-stems"
+                class="tool-content"
+            >
+                <div class="tool-heading">
+                    <strong>Stem Separation</strong>
                 </div>
 
-                <p class="vinyl-description">
-                    {{ vinylMode
-                        ? 'Speed and pitch move together, like a turntable.'
-                        : 'Speed changes while pitch correction remains enabled when supported.'
-                    }}
+                <p class="tool-description">
+                    Separate individual elements of the current track.
+                </p>
+
+                <StemSeparator
+                    v-if="activeTool === 'stems' && currentTrack?.url"
+                    :key="currentTrack.url"
+                    :source-url="currentTrack.url"
+                    :track-name="currentTrack.name || 'track'"
+                    :speed="speed"
+                    :vinyl-mode="vinylMode"
+                />
+
+                <p v-else class="tool-empty">
+                    Select a track to use Stem Separation.
                 </p>
             </div>
 
-            <StemSeparator
-                v-if="showEffects && currentTrack?.url"
-                :key="currentTrack.url"
-                :source-url="currentTrack.url"
-                :track-name="currentTrack.name || 'track'"
-                :speed="speed"
-                :vinyl-mode="vinylMode"
-            />
-
-            <button
-                class="reset-button"
-                type="button"
-                @click="resetEffects"
+            <div
+                v-show="activeTool === 'looper'"
+                id="player-looper"
+                class="tool-content looper-content"
             >
-                Reset
-            </button>
+                <TheLooper
+                    :audio-element="audioRef"
+                    :source-url="currentTrack?.url || ''"
+                    :track-name="currentTrack?.name || 'track'"
+                    :duration="duration"
+                    :current-time="currentTime"
+                    @loop-change="onLoopChange"
+                />
+            </div>
         </div>
 
         <p
@@ -359,8 +470,9 @@ export default {
 
         const audioRef = ref(null);
         const playing = ref(false);
-        const showEffects = ref(false);
-        const showLooper = ref(false);
+
+        const showAudioTools = ref(false);
+        const activeTool = ref(null);
         const loopActive = ref(false);
 
         const currentTime = ref(0);
@@ -384,6 +496,22 @@ export default {
 
         let audioContext = null;
         let graph = null;
+
+        function toggleAudioTools() {
+            showAudioTools.value = !showAudioTools.value;
+
+            if (!showAudioTools.value) {
+                activeTool.value = null;
+            }
+        }
+
+        function toggleTool(tool) {
+            if (activeTool.value === tool) {
+                activeTool.value = null;
+            } else {
+                activeTool.value = tool;
+            }
+        }
 
         function onLoopChange(active) {
             loopActive.value = active;
@@ -808,9 +936,11 @@ export default {
             startShuffle,
             audioRef,
             playing,
-            showEffects,
-            showLooper,
+            showAudioTools,
+            activeTool,
             loopActive,
+            toggleAudioTools,
+            toggleTool,
             onLoopChange,
             currentTime,
             duration,
@@ -851,13 +981,15 @@ export default {
     left: 4vh;
     bottom: 4vh;
     width: min(350px, calc(100vw - 8vh));
-    max-height: min(60dvh, 430px);
+    max-height: min(75dvh, 650px);
     overflow-y: auto;
     background: #000;
     color: #fff;
-    border: 1px solid white;
+    border: 1px solid #fff;
     letter-spacing: -1px;
     padding: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: #555 #000;
 }
 
 .player-line {
@@ -928,7 +1060,7 @@ export default {
     align-items: center;
     width: 100%;
     gap: 9px;
-    margin: 15px 0 11px;
+    margin: 15px 0 14px;
     font-size: 12px;
     letter-spacing: -0.5px;
 }
@@ -938,51 +1070,37 @@ export default {
     min-width: 0;
 }
 
-.lower-line {
-    font-size: 14px;
-    letter-spacing: -0.7px;
-}
-
-.looper-toggle {
-    font-size: 13px;
-    white-space: nowrap;
-}
-
-.looper-toggle.active {
-    text-decoration: underline;
-    text-underline-offset: 4px;
-}
-
-.looper-container {
-    border-top: 1px solid #555;
-    margin-top: 15px;
-}
-
-.player-effects {
-    border-top: 1px solid #555;
-    margin-top: 15px;
-    padding-top: 13px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px 16px;
-    font-size: 14px;
-    letter-spacing: -0.6px;
-}
-
-.player-effects label {
+.tools-bar {
     display: flex;
-    flex-direction: column;
-    gap: 9px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 28px;
+}
+
+.tools-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
     min-width: 0;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.5px;
+    white-space: nowrap;
+    cursor: pointer;
 }
 
-.player-effects output {
-    font-size: 12px;
+.tools-icon {
+    font-size: 18px;
+    line-height: 1;
+    letter-spacing: 0;
+}
+
+.tools-chevron {
+    margin-left: 1px;
+    font-size: 15px;
     color: #aaa;
-}
-
-.player-effects input {
-    width: 100%;
+    letter-spacing: 0;
 }
 
 .volume-label {
@@ -990,17 +1108,138 @@ export default {
     align-items: center;
     gap: 9px;
     white-space: nowrap;
+    font-size: 12px;
+    letter-spacing: -0.5px;
 }
 
 .volume-label input {
     width: 65px;
 }
 
+.audio-tools-panel {
+    border-top: 1px solid #444;
+    margin-top: 17px;
+    padding-top: 14px;
+}
+
+.tool-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.tool-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 67px;
+    padding: 11px 5px;
+    background: #222;
+    border: 1px solid transparent;
+    color: #bbb;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: -0.2px;
+    cursor: pointer;
+    transition:
+        background 150ms ease,
+        color 150ms ease;
+}
+
+.tool-tab svg {
+    width: 19px;
+    height: 19px;
+    flex: none;
+}
+
+.tool-tab:hover:not(.active) {
+    background: #303030;
+    color: #fff;
+}
+
+.tool-tab.active {
+    background: #fff;
+    color: #000;
+}
+
+.tool-content {
+    padding-top: 22px;
+}
+
+.tool-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.tool-heading strong {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+.heading-action {
+    color: #aaa;
+    font-size: 12px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.tool-description {
+    margin: -7px 0 18px;
+    color: #999;
+    font-size: 11px;
+    line-height: 1.5;
+    letter-spacing: 0;
+}
+
+.tool-empty {
+    color: #999;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.player-effects {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 23px 16px;
+    font-size: 13px;
+    letter-spacing: -0.5px;
+}
+
+.player-effects label {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    min-width: 0;
+}
+
+.control-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+}
+
+.player-effects output {
+    font-size: 11px;
+    color: #aaa;
+    white-space: nowrap;
+}
+
+.player-effects input {
+    width: 100%;
+}
+
 .vinyl-section {
-    grid-column: 1 / -1;
     border-top: 1px solid rgba(255, 255, 255, 0.2);
-    padding-top: 17px;
-    margin-top: 4px;
+    padding-top: 20px;
+    margin-top: 27px;
 }
 
 .vinyl-header {
@@ -1008,9 +1247,12 @@ export default {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    font-size: 14px;
+    font-size: 13px;
+    margin-bottom: 15px;
+}
+
+.vinyl-header strong {
     font-weight: 600;
-    margin-bottom: 14px;
 }
 
 .vinyl-mode {
@@ -1049,6 +1291,7 @@ export default {
     display: flex;
     flex-direction: column;
     gap: 13px;
+    font-size: 13px;
 }
 
 .speed-heading {
@@ -1059,7 +1302,7 @@ export default {
 
 .speed-heading output {
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .speed-markers {
@@ -1075,46 +1318,47 @@ export default {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-    margin-top: 20px;
+    margin-top: 22px;
 }
 
 .pitch-readout > div {
     display: flex;
     flex-direction: column;
     gap: 7px;
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
-    padding-top: 12px;
+    background: #202020;
+    padding: 13px;
+    min-width: 0;
 }
 
 .pitch-readout span {
-    font-size: 11px;
+    font-size: 10px;
     color: #999;
-    letter-spacing: -0.2px;
+    letter-spacing: 0.3px;
 }
 
 .pitch-readout strong {
-    font-size: 20px;
+    font-size: 19px;
     font-weight: 400;
     letter-spacing: -0.8px;
     font-variant-numeric: tabular-nums;
 }
 
 .vinyl-description {
-    margin: 15px 0 0;
+    margin: 17px 0 0;
     font-size: 11px;
     line-height: 1.5;
     color: #888;
     letter-spacing: -0.2px;
 }
 
-.reset-button {
-    grid-column: 1 / -1;
-    text-align: left;
-    justify-self: start;
-    margin-top: 4px;
-    font-size: 13px;
-    text-decoration: underline;
-    text-underline-offset: 3px;
+.looper-content {
+    padding-top: 3px;
+}
+
+.looper-content :deep(.looper) {
+    border-top: 0;
+    padding-top: 18px;
+    margin-top: 0;
 }
 
 .player-error {
@@ -1196,7 +1440,8 @@ input:focus-visible {
         left: 20px;
         bottom: 20px;
         width: min(340px, calc(100vw - 165px));
-        padding-top: 13px;
+        max-height: 75dvh;
+        padding: 13px;
     }
 
     .current-track {
@@ -1211,14 +1456,27 @@ input:focus-visible {
         font-size: 15px;
     }
 
-    .lower-line {
+    .tools-bar {
         flex-wrap: wrap;
-        gap: 8px;
-        font-size: 12px;
+        gap: 10px;
     }
 
     .seek-line {
         font-size: 10px;
+    }
+
+    .tool-tab {
+        min-height: 58px;
+        font-size: 10px;
+    }
+
+    .tool-tab svg {
+        width: 17px;
+        height: 17px;
+    }
+
+    .player-effects {
+        gap: 20px 10px;
     }
 
     .pitch-readout strong {
@@ -1231,6 +1489,7 @@ input:focus-visible {
         left: 12px;
         bottom: 14px;
         width: calc(100vw - 150px);
+        padding: 11px;
     }
 
     .transport {
@@ -1249,6 +1508,26 @@ input:focus-visible {
         width: 47px;
     }
 
+    .tool-tabs {
+        gap: 4px;
+    }
+
+    .tool-tab {
+        min-height: 52px;
+        padding: 8px 2px;
+        font-size: 9px;
+        gap: 6px;
+    }
+
+    .tool-tab svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .player-effects {
+        grid-template-columns: 1fr;
+    }
+
     .mode-switch button {
         font-size: 10px;
         padding: 9px 4px;
@@ -1258,13 +1537,18 @@ input:focus-visible {
         gap: 8px;
     }
 
+    .pitch-readout > div {
+        padding: 9px;
+    }
+
     .pitch-readout strong {
         font-size: 15px;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .mode-switch button {
+    .mode-switch button,
+    .tool-tab {
         transition: none;
     }
 }
