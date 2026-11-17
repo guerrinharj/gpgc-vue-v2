@@ -1,4 +1,3 @@
-
 <template>
     <Transition
         name="soft-reveal"
@@ -197,9 +196,7 @@
                                     {{ asText(person) }}
                                 </p>
 
-                                <p
-                                    v-if="isAuthenticated && entry.slug"
-                                >
+                                <p v-if="isAuthenticated && entry.slug">
                                     <router-link
                                         :to="`/update-release/${entry.slug}`"
                                     >
@@ -281,11 +278,25 @@
 
                         <p v-if="validUrl(entry.url)">
                             <a
+                                class="action-icon"
                                 :href="entry.url"
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                aria-label="Open release"
+                                title="Open release"
                             >
-                                Open release
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.6"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M7 17L17 7" />
+                                    <path d="M8 7H17V16" />
+                                </svg>
                             </a>
                         </p>
 
@@ -314,11 +325,25 @@
 
                         <p v-if="validUrl(entry.url)">
                             <a
+                                class="action-icon"
                                 :href="entry.url"
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                aria-label="Open soundtrack"
+                                title="Open soundtrack"
                             >
-                                Open soundtrack
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.6"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M7 17L17 7" />
+                                    <path d="M8 7H17V16" />
+                                </svg>
                             </a>
                         </p>
 
@@ -826,6 +851,10 @@ export default {
     overflow-wrap: anywhere;
 }
 
+.entry-meta p:has(> .action-icon) {
+    border-bottom: none;
+}
+
 .entry-meta p:first-child {
     border-top: 1px solid rgba(255, 255, 255, 0.09);
 }
@@ -836,7 +865,7 @@ export default {
     margin-right: 10px;
 }
 
-.entry-meta a,
+.entry-meta a:not(.action-icon),
 .about-copy a,
 .entry-admin a {
     text-decoration: underline;

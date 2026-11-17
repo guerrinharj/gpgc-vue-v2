@@ -62,6 +62,7 @@
                 max="1000"
                 :value="progress"
                 :disabled="!duration"
+                :style="rangeStyle(progress, 0, 1000)"
                 aria-label="Track position"
                 @input="seek"
             />
@@ -81,12 +82,14 @@
 
             <label for="player-volume" class="volume-label">
                 Volume
+
                 <input
                     id="player-volume"
                     v-model.number="volume"
                     type="range"
                     min="0"
                     max="100"
+                    :style="rangeStyle(volume, 0, 100)"
                     @input="updateVolume"
                 />
             </label>
@@ -100,11 +103,13 @@
             <label>
                 Bass
                 <output>{{ bass }} dB</output>
+
                 <input
                     v-model.number="bass"
                     type="range"
                     min="-12"
                     max="12"
+                    :style="rangeStyle(bass, -12, 12)"
                     @input="updateEffects"
                 />
             </label>
@@ -112,25 +117,30 @@
             <label>
                 Treble
                 <output>{{ treble }} dB</output>
+
                 <input
                     v-model.number="treble"
                     type="range"
                     min="-12"
                     max="12"
+                    :style="rangeStyle(treble, -12, 12)"
                     @input="updateEffects"
                 />
             </label>
 
             <label>
                 Pan
+
                 <output>
                     {{ pan < 0 ? `L ${-pan}` : pan > 0 ? `R ${pan}` : 'Center' }}
                 </output>
+
                 <input
                     v-model.number="pan"
                     type="range"
                     min="-100"
                     max="100"
+                    :style="rangeStyle(pan, -100, 100)"
                     @input="updateEffects"
                 />
             </label>
@@ -138,11 +148,13 @@
             <label>
                 Echo
                 <output>{{ echo }}%</output>
+
                 <input
                     v-model.number="echo"
                     type="range"
                     min="0"
                     max="70"
+                    :style="rangeStyle(echo, 0, 70)"
                     @input="updateEffects"
                 />
             </label>
@@ -150,6 +162,7 @@
             <div class="vinyl-section">
                 <div class="vinyl-header">
                     <span>Speed / Pitch</span>
+
                     <span class="vinyl-mode">
                         {{ vinylMode ? 'VINYL' : 'INDEPENDENT' }}
                     </span>
@@ -178,7 +191,10 @@
                 <label class="speed-control">
                     <span class="speed-heading">
                         <span>Speed</span>
-                        <output>{{ (speed / 100).toFixed(2) }}×</output>
+
+                        <output>
+                            {{ (speed / 100).toFixed(2) }}×
+                        </output>
                     </span>
 
                     <input
@@ -188,6 +204,7 @@
                         max="150"
                         step="1"
                         aria-label="Playback speed"
+                        :style="rangeStyle(speed, 50, 150)"
                         @input="updateEffects"
                     />
                 </label>
@@ -205,18 +222,27 @@
                     </div>
 
                     <div>
-                        <span>Equivalent RPM</span>
-                        <strong>{{ rpmLabel }}</strong>
+                        <span>BPM</span>
+                        <strong>{{ bpmLabel }}</strong>
                     </div>
                 </div>
 
                 <p class="vinyl-description">
                     {{ vinylMode
-                        ? 'Speed and pitch move together, just like a turntable.'
+                        ? 'Speed and pitch move together, like a turntable.'
                         : 'Speed changes while pitch correction remains enabled when supported.'
                     }}
                 </p>
             </div>
+
+            <StemSeparator
+                v-if="showEffects && currentTrack?.url"
+                :key="currentTrack.url"
+                :source-url="currentTrack.url"
+                :track-name="currentTrack.name || 'track'"
+                :speed="speed"
+                :vinyl-mode="vinylMode"
+            />
 
             <button
                 class="reset-button"
@@ -251,13 +277,23 @@ import {
     useStore,
 } from 'vuex';
 
+import StemSeparator from './StemSeparator.vue';
+
+import { detectBpmFromUrl } from '@/utils/detect-bpm';
+
 export default {
     name: 'PlayerBar',
+
+    components: {
+        StemSeparator,
+    },
 
     setup() {
         const store = useStore();
 
-        const currentTrack = computed(() => store.getters.currentTrack);
+        const currentTrack = computed(() => {
+            return store.getters.currentTrack;
+        });
 
         const audioRef = ref(null);
         const playing = ref(false);
@@ -272,9 +308,11 @@ export default {
         const pan = ref(0);
         const echo = ref(0);
         const speed = ref(100);
-
-        // Ativado por padrão para simular um toca-discos.
         const vinylMode = ref(true);
+        const originalBpm = ref(null);
+        const bpmLoading = ref(false);
+
+        let bpmRequestId = 0;
 
         const audioError = ref('');
 
@@ -285,33 +323,45 @@ export default {
             return speed.value / 100;
         });
 
-        // 12 semitons por oitava.
-        // A relação de frequência é diretamente proporcional
-        // à velocidade quando a correção de pitch está desligada.
         const pitchSemitones = computed(() => {
-            if (!vinylMode.value) {
-                return 0;
-            }
-
-            return 12 * Math.log2(playbackRate.value);
+            return vinylMode.value
+                ? 12 * Math.log2(playbackRate.value)
+                : 0;
         });
 
         const pitchLabel = computed(() => {
             const value = pitchSemitones.value;
 
-            if (Math.abs(value) < 0.005) {
-                return '0.00 st';
-            }
-
             return `${value > 0 ? '+' : ''}${value.toFixed(2)} st`;
         });
 
-        // Referência visual: um disco de 33⅓ RPM.
-        // Não representa a rotação física de um toca-discos.
-        const rpmLabel = computed(() => {
-            const rpm = (100 / 3) * playbackRate.value;
-            return `${rpm.toFixed(1)} RPM`;
+        const bpmLabel = computed(() => {
+            if (bpmLoading.value) {
+                return 'Detecting…';
+            }
+
+            if (!originalBpm.value) {
+                return '—';
+            }
+
+            const adjustedBpm = originalBpm.value * playbackRate.value;
+
+            return `${Math.round(adjustedBpm)} BPM`;
         });
+
+        function rangeStyle(value, min, max) {
+            const percent = Math.max(
+                0,
+                Math.min(
+                    100,
+                    ((value - min) / (max - min)) * 100
+                )
+            );
+
+            return {
+                '--range-progress': `${percent}%`,
+            };
+        }
 
         function formatTime(value) {
             if (!Number.isFinite(value)) {
@@ -323,9 +373,44 @@ export default {
 
         const progress = computed(() => {
             return duration.value
-                ? Math.round(currentTime.value / duration.value * 1000)
+                ? Math.round(
+                    currentTime.value / duration.value * 1000
+                )
                 : 0;
         });
+
+        async function analyzeBpm(url) {
+            const requestId = ++bpmRequestId;
+
+            originalBpm.value = null;
+            bpmLoading.value = Boolean(url);
+
+            if (!url) {
+                return;
+            }
+
+            try {
+                const detected = await detectBpmFromUrl(url);
+
+                if (requestId !== bpmRequestId) {
+                    return;
+                }
+
+                originalBpm.value = detected;
+            } catch (error) {
+                if (requestId !== bpmRequestId) {
+                    return;
+                }
+
+                console.warn('BPM detection failed:', error);
+
+                originalBpm.value = null;
+            } finally {
+                if (requestId === bpmRequestId) {
+                    bpmLoading.value = false;
+                }
+            }
+        }
 
         function onMetadata() {
             duration.value = audioRef.value?.duration || 0;
@@ -357,7 +442,9 @@ export default {
                 playing.value = true;
             } catch (error) {
                 playing.value = false;
-                audioError.value = 'Playback was blocked or the audio could not be loaded.';
+
+                audioError.value =
+                    'Playback was blocked or the audio could not be loaded.';
 
                 console.warn('Audio playback:', error);
             }
@@ -418,25 +505,18 @@ export default {
                 return;
             }
 
-            // HTMLMediaElement normalmente corrige o pitch
-            // automaticamente quando playbackRate muda.
-            //
-            // Desabilitar essa correção faz velocidade e pitch
-            // variarem juntos, reproduzindo o comportamento
-            // de um toca-discos.
-            const preservePitch = !vinylMode.value;
+            const preserve = !vinylMode.value;
 
             if ('preservesPitch' in audio) {
-                audio.preservesPitch = preservePitch;
+                audio.preservesPitch = preserve;
             }
 
-            // Compatibilidade com implementações antigas.
             if ('mozPreservesPitch' in audio) {
-                audio.mozPreservesPitch = preservePitch;
+                audio.mozPreservesPitch = preserve;
             }
 
             if ('webkitPreservesPitch' in audio) {
-                audio.webkitPreservesPitch = preservePitch;
+                audio.webkitPreservesPitch = preserve;
             }
 
             audio.playbackRate = playbackRate.value;
@@ -463,27 +543,39 @@ export default {
             try {
                 audioContext = new Context();
 
-                const source = audioContext.createMediaElementSource(
-                    audioRef.value
-                );
+                const source =
+                    audioContext.createMediaElementSource(
+                        audioRef.value
+                    );
 
-                const bassFilter = audioContext.createBiquadFilter();
+                const bassFilter =
+                    audioContext.createBiquadFilter();
+
                 bassFilter.type = 'lowshelf';
                 bassFilter.frequency.value = 200;
 
-                const trebleFilter = audioContext.createBiquadFilter();
+                const trebleFilter =
+                    audioContext.createBiquadFilter();
+
                 trebleFilter.type = 'highshelf';
                 trebleFilter.frequency.value = 3400;
 
-                const stereoPan = audioContext.createStereoPanner();
+                const stereoPan =
+                    audioContext.createStereoPanner();
 
-                const delay = audioContext.createDelay(0.8);
+                const delay =
+                    audioContext.createDelay(0.8);
+
                 delay.delayTime.value = 0.28;
 
-                const feedback = audioContext.createGain();
+                const feedback =
+                    audioContext.createGain();
+
                 feedback.gain.value = 0.25;
 
-                const wet = audioContext.createGain();
+                const wet =
+                    audioContext.createGain();
+
                 wet.gain.value = 0;
 
                 source.connect(bassFilter);
@@ -541,18 +633,21 @@ export default {
             applyPlaybackRate();
         });
 
-        watch(
-            () => currentTrack.value?.url,
-            async url => {
-                await nextTick();
+            watch(
+                () => currentTrack.value?.url,
+                async url => {
+                    analyzeBpm(url);
 
-                const audio = audioRef.value;
+                    await nextTick();
+
+                    const audio = audioRef.value;
 
                 if (!audio) {
                     return;
                 }
 
                 audio.pause();
+
                 audioError.value = '';
                 duration.value = 0;
                 currentTime.value = 0;
@@ -579,6 +674,7 @@ export default {
 
         onBeforeUnmount(() => {
             audioRef.value?.pause();
+
             audioContext?.close().catch(() => {});
         });
 
@@ -599,7 +695,8 @@ export default {
             audioError,
             progress,
             pitchLabel,
-            rpmLabel,
+            bpmLabel,
+            rangeStyle,
             formatTime,
             onMetadata,
             onTime,
@@ -873,86 +970,80 @@ export default {
     margin: 9px 0 0;
 }
 
-
 /* RANGE INPUTS */
 
-input[type="range"] {
-    -webkit-appearance: none !important;
-    appearance: none !important;
+input[type='range'] {
+    appearance: none;
+    -webkit-appearance: none;
 
     width: 100%;
     height: 2px;
     padding: 0;
-    margin: 0;
+
+    border: 0;
+    border-radius: 0;
 
     background: linear-gradient(
         to right,
-        #ffffff 0%,
-        #ffffff var(--range-progress, 50%),
-        #444444 var(--range-progress, 50%),
-        #444444 100%
-    ) !important;
+        #fff 0%,
+        #fff var(--range-progress, 50%),
+        #444 var(--range-progress, 50%),
+        #444 100%
+    );
 
-    border: none !important;
-    border-radius: 0;
-    outline: none;
     cursor: pointer;
 }
 
-/* CHROME / SAFARI */
-
-input[type="range"]::-webkit-slider-runnable-track {
-    -webkit-appearance: none;
+input[type='range']::-webkit-slider-runnable-track {
     appearance: none;
-    width: 100%;
+    -webkit-appearance: none;
     height: 2px;
-    background: transparent !important;
-    border: none;
+    background: transparent;
+    border: 0;
 }
 
-input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
+input[type='range']::-webkit-slider-thumb {
     appearance: none;
+    -webkit-appearance: none;
 
     width: 10px;
     height: 10px;
     margin-top: -4px;
 
     background: #fff;
-    border: none;
+    border: 0;
     border-radius: 50%;
-    cursor: grab;
 }
 
-/* FIREFOX */
-
-input[type="range"]::-moz-range-track {
+input[type='range']::-moz-range-track {
     height: 2px;
     background: #444;
-    border: none;
+    border: 0;
 }
 
-input[type="range"]::-moz-range-progress {
+input[type='range']::-moz-range-progress {
     height: 2px;
     background: #fff;
 }
 
-input[type="range"]::-moz-range-thumb {
+input[type='range']::-moz-range-thumb {
     width: 10px;
     height: 10px;
     background: #fff;
-    border: none;
+    border: 0;
     border-radius: 50%;
-    cursor: grab;
 }
 
-/* DISABLED */
-
-input[type="range"]:disabled {
+input[type='range']:disabled {
     opacity: 0.35;
     cursor: default;
 }
 
+button:focus-visible,
+input:focus-visible {
+    outline: 1px solid #fff;
+    outline-offset: 4px;
+}
 
 /* MOBILE */
 
