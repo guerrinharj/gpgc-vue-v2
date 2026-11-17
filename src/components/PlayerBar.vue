@@ -1,4 +1,3 @@
-
 <template>
     <aside class="audio-player" aria-label="Audio player">
         <audio
@@ -31,29 +30,29 @@
 
             <div class="transport">
                 <button
-                    type="button"
-                    aria-label="Previous track"
+                type="button"
+                aria-label="Previous track"
                     :disabled="!currentTrack"
                     @click="previous"
                 >←</button>
 
                 <button
-                    type="button"
+                type="button"
                     :aria-label="playing ? 'Pause' : 'Play'"
                     :disabled="!currentTrack"
                     @click="toggle"
                 >{{ playing ? 'Ⅱ' : '▶' }}</button>
 
                 <button
-                    type="button"
-                    aria-label="Next track"
+                type="button"
+                aria-label="Next track"
                     :disabled="!currentTrack"
                     @click="next"
                 >→</button>
 
                 <button
-                    type="button"
-                    class="shuffle-button"
+                type="button"
+                class="shuffle-button"
                     :class="{ active: radioMode }"
                     :aria-pressed="radioMode"
                     :disabled="shuffleLoading"
@@ -84,9 +83,9 @@
             <span>{{ formatTime(currentTime) }}</span>
 
             <input
-                type="range"
-                min="0"
-                max="1000"
+            type="range"
+            min="0"
+            max="1000"
                 :value="progress"
                 :disabled="!duration"
                 :style="rangeStyle(progress, 0, 1000)"
@@ -99,8 +98,8 @@
 
         <div class="tools-bar">
             <button
-                type="button"
-                class="tools-toggle"
+            type="button"
+            class="tools-toggle"
                 :aria-expanded="showAudioTools"
                 aria-controls="audio-tools-panel"
                 @click="toggleAudioTools"
@@ -116,11 +115,11 @@
                 <span>Volume</span>
 
                 <input
-                    id="player-volume"
-                    v-model.number="volume"
-                    type="range"
-                    min="0"
-                    max="100"
+                id="player-volume"
+                v-model.number="volume"
+                type="range"
+                min="0"
+                max="100"
                     :style="rangeStyle(volume, 0, 100)"
                     @input="updateVolume"
                 />
@@ -128,31 +127,31 @@
         </div>
 
         <div
-            v-show="showAudioTools"
-            id="audio-tools-panel"
-            class="audio-tools-panel"
+        v-show="showAudioTools"
+        id="audio-tools-panel"
+        class="audio-tools-panel"
         >
             <div
-                class="tool-tabs"
-                role="group"
-                aria-label="Audio tools"
+            class="tool-tabs"
+            role="group"
+            aria-label="Audio tools"
             >
                 <button
-                    type="button"
-                    class="tool-tab"
+                type="button"
+                class="tool-tab"
                     :class="{ active: activeTool === 'sound' }"
                     :aria-pressed="activeTool === 'sound'"
                     aria-controls="player-effects"
                     @click="toggleTool('sound')"
                 >
                     <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.6"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
                     >
                         <line x1="4" y1="7" x2="20" y2="7" />
                         <line x1="4" y1="17" x2="20" y2="17" />
@@ -163,20 +162,20 @@
                 </button>
 
                 <button
-                    type="button"
-                    class="tool-tab"
+                type="button"
+                class="tool-tab"
                     :class="{ active: activeTool === 'stems' }"
                     :aria-pressed="activeTool === 'stems'"
                     aria-controls="player-stems"
                     @click="toggleTool('stems')"
                 >
                     <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.6"
-                        stroke-linecap="round"
-                        aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    aria-hidden="true"
                     >
                         <line x1="4" y1="10" x2="4" y2="14" />
                         <line x1="8" y1="5" x2="8" y2="19" />
@@ -188,21 +187,21 @@
                 </button>
 
                 <button
-                    type="button"
-                    class="tool-tab"
+                type="button"
+                class="tool-tab"
                     :class="{ active: activeTool === 'looper' }"
                     :aria-pressed="activeTool === 'looper'"
                     aria-controls="player-looper"
                     @click="toggleTool('looper')"
                 >
                     <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.6"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
                     >
                         <path d="M17 2l4 4-4 4" />
                         <path d="M3 11V9a3 3 0 0 1 3-3h15" />
@@ -214,16 +213,16 @@
             </div>
 
             <div
-                v-show="activeTool === 'sound'"
-                id="player-effects"
-                class="tool-content"
+            v-show="activeTool === 'sound'"
+            id="player-effects"
+            class="tool-content"
             >
                 <div class="tool-heading">
                     <strong>Sound Settings</strong>
 
                     <button
-                        type="button"
-                        class="heading-action"
+                    type="button"
+                    class="heading-action"
                         @click="resetEffects"
                     >
                         Reset
@@ -238,10 +237,10 @@
                         </span>
 
                         <input
-                            v-model.number="bass"
-                            type="range"
-                            min="-12"
-                            max="12"
+                        v-model.number="bass"
+                        type="range"
+                        min="-12"
+                        max="12"
                             :style="rangeStyle(bass, -12, 12)"
                             @input="updateEffects"
                         />
@@ -254,10 +253,10 @@
                         </span>
 
                         <input
-                            v-model.number="treble"
-                            type="range"
-                            min="-12"
-                            max="12"
+                        v-model.number="treble"
+                        type="range"
+                        min="-12"
+                        max="12"
                             :style="rangeStyle(treble, -12, 12)"
                             @input="updateEffects"
                         />
@@ -278,10 +277,10 @@
                         </span>
 
                         <input
-                            v-model.number="pan"
-                            type="range"
-                            min="-100"
-                            max="100"
+                        v-model.number="pan"
+                        type="range"
+                        min="-100"
+                        max="100"
                             :style="rangeStyle(pan, -100, 100)"
                             @input="updateEffects"
                         />
@@ -294,10 +293,10 @@
                         </span>
 
                         <input
-                            v-model.number="echo"
-                            type="range"
-                            min="0"
-                            max="70"
+                        v-model.number="echo"
+                        type="range"
+                        min="0"
+                        max="70"
                             :style="rangeStyle(echo, 0, 70)"
                             @input="updateEffects"
                         />
@@ -315,7 +314,7 @@
 
                     <div class="mode-switch">
                         <button
-                            type="button"
+                        type="button"
                             :class="{ active: !vinylMode }"
                             :aria-pressed="!vinylMode"
                             @click="setVinylMode(false)"
@@ -324,7 +323,7 @@
                         </button>
 
                         <button
-                            type="button"
+                        type="button"
                             :class="{ active: vinylMode }"
                             :aria-pressed="vinylMode"
                             @click="setVinylMode(true)"
@@ -340,12 +339,12 @@
                         </span>
 
                         <input
-                            v-model.number="speed"
-                            type="range"
-                            min="50"
-                            max="150"
-                            step="1"
-                            aria-label="Playback speed"
+                        v-model.number="speed"
+                        type="range"
+                        min="50"
+                        max="150"
+                        step="1"
+                        aria-label="Playback speed"
                             :style="rangeStyle(speed, 50, 150)"
                             @input="updateEffects"
                         />
@@ -380,9 +379,9 @@
             </div>
 
             <div
-                v-show="activeTool === 'stems'"
-                id="player-stems"
-                class="tool-content"
+            v-show="activeTool === 'stems'"
+            id="player-stems"
+            class="tool-content"
             >
                 <div class="tool-heading">
                     <strong>Stem Separation</strong>
@@ -407,12 +406,12 @@
             </div>
 
             <div
-                v-show="activeTool === 'looper'"
-                id="player-looper"
-                class="tool-content looper-content"
+            v-show="activeTool === 'looper'"
+            id="player-looper"
+            class="tool-content looper-content"
             >
                 <TheLooper
-                    ref="looperRef"
+                ref="looperRef"
                     :audio-element="audioRef"
                     :source-url="currentTrack?.url || ''"
                     :track-name="currentTrack?.name || 'track'"
@@ -421,6 +420,7 @@
                     :audio-context="audioContext"
                     :connect-loop-source="connectLoopSource"
                     :playback-rate="playbackRate"
+                    :original-bpm="originalBpm"
                     @loop-change="onLoopChange"
                     @loop-playing="onLoopPlaying"
                     @loop-time="onLoopTime"
@@ -439,7 +439,7 @@
 </template>
 
 <script>
-import {
+    import {
     computed,
     nextTick,
     onMounted,
@@ -448,14 +448,14 @@ import {
     watch,
 } from 'vue';
 
-import { useStore } from 'vuex';
+        import { useStore } from 'vuex';
 
-import StemSeparator from './StemSeparator.vue';
-import TheLooper from './TheLooper.vue';
+        import StemSeparator from './StemSeparator.vue';
+        import TheLooper from './TheLooper.vue';
 
-import { detectBpmFromUrl } from '@/utils/detect-bpm';
+        import { detectBpmFromUrl } from '@/utils/detect-bpm';
 
-export default {
+        export default {
     name: 'PlayerBar',
 
     components: {
@@ -1086,7 +1086,7 @@ export default {
 </script>
 
 <style scoped>
-.audio-player {
+        .audio-player {
     position: fixed;
     z-index: 40;
     left: 4vh;
@@ -1103,14 +1103,14 @@ export default {
     scrollbar-color: #555 #000;
 }
 
-.player-line {
+    .player-line {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
 }
 
-.current-track {
+    .current-track {
     min-width: 0;
     flex: 1;
     display: flex;
@@ -1119,54 +1119,54 @@ export default {
     line-height: 1.15;
 }
 
-.current-track strong,
-.current-track span {
+    .current-track strong,
+        .current-track span {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.current-track strong {
+    .current-track strong {
     font-weight: 700;
 }
 
-.current-track span {
+    .current-track span {
     font-weight: 400;
     margin-top: 3px;
 }
 
-.transport {
+    .transport {
     display: flex;
     align-items: center;
     gap: 12px;
     flex: none;
 }
 
-.transport button {
+    .transport button {
     font-size: 19px;
     line-height: 1;
     letter-spacing: 0;
 }
 
-.transport button:disabled {
+    .transport button:disabled {
     opacity: 0.55;
     cursor: default;
 }
 
-.shuffle-button.active {
+    .shuffle-button.active {
     text-decoration: underline;
     text-underline-offset: 5px;
 }
 
-.shuffle-status {
+    .shuffle-status {
     margin: 10px 0 0;
     font-size: 12px;
     color: #aaa;
     letter-spacing: -0.5px;
 }
 
-.seek-line {
+    .seek-line {
     display: flex;
     align-items: center;
     width: 100%;
@@ -1176,12 +1176,12 @@ export default {
     letter-spacing: -0.5px;
 }
 
-.seek-line input {
+    .seek-line input {
     flex: 1;
     min-width: 0;
 }
 
-.tools-bar {
+    .tools-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1189,7 +1189,7 @@ export default {
     min-height: 28px;
 }
 
-.tools-toggle {
+    .tools-toggle {
     display: flex;
     align-items: center;
     gap: 7px;
@@ -1201,20 +1201,20 @@ export default {
     cursor: pointer;
 }
 
-.tools-icon {
+    .tools-icon {
     font-size: 18px;
     line-height: 1;
     letter-spacing: 0;
 }
 
-.tools-chevron {
+    .tools-chevron {
     margin-left: 1px;
     font-size: 15px;
     color: #aaa;
     letter-spacing: 0;
 }
 
-.volume-label {
+    .volume-label {
     display: flex;
     align-items: center;
     gap: 9px;
@@ -1223,23 +1223,23 @@ export default {
     letter-spacing: -0.5px;
 }
 
-.volume-label input {
+    .volume-label input {
     width: 65px;
 }
 
-.audio-tools-panel {
+    .audio-tools-panel {
     border-top: 1px solid #444;
     margin-top: 17px;
     padding-top: 14px;
 }
 
-.tool-tabs {
+    .tool-tabs {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
 }
 
-.tool-tab {
+    .tool-tab {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1260,27 +1260,27 @@ export default {
         color 150ms ease;
 }
 
-.tool-tab svg {
+        .tool-tab svg {
     width: 19px;
     height: 19px;
     flex: none;
 }
 
-.tool-tab:hover:not(.active) {
+    .tool-tab:hover:not(.active) {
     background: #303030;
     color: #fff;
 }
 
-.tool-tab.active {
+    .tool-tab.active {
     background: #fff;
     color: #000;
 }
 
-.tool-content {
+    .tool-content {
     padding-top: 22px;
 }
 
-.tool-heading {
+    .tool-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1288,20 +1288,20 @@ export default {
     margin-bottom: 20px;
 }
 
-.tool-heading strong {
+    .tool-heading strong {
     font-size: 14px;
     font-weight: 600;
     letter-spacing: -0.5px;
 }
 
-.heading-action {
+    .heading-action {
     color: #aaa;
     font-size: 12px;
     text-decoration: underline;
     text-underline-offset: 3px;
 }
 
-.tool-description {
+    .tool-description {
     margin: -7px 0 18px;
     color: #999;
     font-size: 11px;
@@ -1309,13 +1309,13 @@ export default {
     letter-spacing: 0;
 }
 
-.tool-empty {
+    .tool-empty {
     color: #999;
     font-size: 12px;
     line-height: 1.5;
 }
 
-.player-effects {
+    .player-effects {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 23px 16px;
@@ -1323,37 +1323,37 @@ export default {
     letter-spacing: -0.5px;
 }
 
-.player-effects label {
+    .player-effects label {
     display: flex;
     flex-direction: column;
     gap: 13px;
     min-width: 0;
 }
 
-.control-heading {
+    .control-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 5px;
 }
 
-.player-effects output {
+    .player-effects output {
     font-size: 11px;
     color: #aaa;
     white-space: nowrap;
 }
 
-.player-effects input {
+    .player-effects input {
     width: 100%;
 }
 
-.vinyl-section {
+    .vinyl-section {
     border-top: 1px solid rgba(255, 255, 255, 0.2);
     padding-top: 20px;
     margin-top: 27px;
 }
 
-.vinyl-header {
+    .vinyl-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1362,25 +1362,25 @@ export default {
     margin-bottom: 15px;
 }
 
-.vinyl-header strong {
+    .vinyl-header strong {
     font-weight: 600;
 }
 
-.vinyl-mode {
+    .vinyl-mode {
     font-size: 10px;
     font-weight: 400;
     letter-spacing: 0.5px;
     color: #aaa;
 }
 
-.mode-switch {
+    .mode-switch {
     display: grid;
     grid-template-columns: 1fr 1fr;
     border: 1px solid rgba(255, 255, 255, 0.3);
     margin-bottom: 22px;
 }
 
-.mode-switch button {
+    .mode-switch button {
     padding: 10px 8px;
     font-size: 12px;
     text-align: center;
@@ -1389,34 +1389,34 @@ export default {
         color 180ms ease;
 }
 
-.mode-switch button + button {
+        .mode-switch button + button {
     border-left: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.mode-switch button.active {
+    .mode-switch button.active {
     background: #fff;
     color: #000;
 }
 
-.speed-control {
+    .speed-control {
     display: flex;
     flex-direction: column;
     gap: 13px;
     font-size: 13px;
 }
 
-.speed-heading {
+    .speed-heading {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.speed-heading output {
+    .speed-heading output {
     color: #fff;
     font-size: 13px;
 }
 
-.speed-markers {
+    .speed-markers {
     display: flex;
     justify-content: space-between;
     font-size: 10px;
@@ -1425,14 +1425,14 @@ export default {
     margin-top: 9px;
 }
 
-.pitch-readout {
+    .pitch-readout {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
     margin-top: 22px;
 }
 
-.pitch-readout > div {
+    .pitch-readout > div {
     display: flex;
     flex-direction: column;
     gap: 7px;
@@ -1441,20 +1441,20 @@ export default {
     min-width: 0;
 }
 
-.pitch-readout span {
+    .pitch-readout span {
     font-size: 10px;
     color: #999;
     letter-spacing: 0.3px;
 }
 
-.pitch-readout strong {
+    .pitch-readout strong {
     font-size: 19px;
     font-weight: 400;
     letter-spacing: -0.8px;
     font-variant-numeric: tabular-nums;
 }
 
-.vinyl-description {
+    .vinyl-description {
     margin: 17px 0 0;
     font-size: 11px;
     line-height: 1.5;
@@ -1462,24 +1462,24 @@ export default {
     letter-spacing: -0.2px;
 }
 
-.looper-content {
+    .looper-content {
     padding-top: 3px;
 }
 
-.looper-content :deep(.looper) {
+    .looper-content :deep(.looper) {
     border-top: 0;
     padding-top: 18px;
     margin-top: 0;
 }
 
-.player-error {
+    .player-error {
     font-size: 12px;
     letter-spacing: -0.5px;
     color: #aaa;
     margin: 9px 0 0;
 }
 
-input[type='range'] {
+    input[type='range'] {
     appearance: none;
     -webkit-appearance: none;
     width: 100%;
@@ -1497,7 +1497,7 @@ input[type='range'] {
     cursor: pointer;
 }
 
-input[type='range']::-webkit-slider-runnable-track {
+    input[type='range']::-webkit-slider-runnable-track {
     appearance: none;
     -webkit-appearance: none;
     height: 2px;
@@ -1505,7 +1505,7 @@ input[type='range']::-webkit-slider-runnable-track {
     border: 0;
 }
 
-input[type='range']::-webkit-slider-thumb {
+    input[type='range']::-webkit-slider-thumb {
     appearance: none;
     -webkit-appearance: none;
     width: 10px;
@@ -1516,18 +1516,18 @@ input[type='range']::-webkit-slider-thumb {
     border-radius: 50%;
 }
 
-input[type='range']::-moz-range-track {
+    input[type='range']::-moz-range-track {
     height: 2px;
     background: #444;
     border: 0;
 }
 
-input[type='range']::-moz-range-progress {
+    input[type='range']::-moz-range-progress {
     height: 2px;
     background: #fff;
 }
 
-input[type='range']::-moz-range-thumb {
+    input[type='range']::-moz-range-thumb {
     width: 10px;
     height: 10px;
     background: #fff;
@@ -1535,13 +1535,13 @@ input[type='range']::-moz-range-thumb {
     border-radius: 50%;
 }
 
-input[type='range']:disabled {
+    input[type='range']:disabled {
     opacity: 0.35;
     cursor: default;
 }
 
-button:focus-visible,
-input:focus-visible {
+    button:focus-visible,
+        input:focus-visible {
     outline: 1px solid #fff;
     outline-offset: 4px;
 }
@@ -1659,7 +1659,7 @@ input:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
     .mode-switch button,
-    .tool-tab {
+        .tool-tab {
         transition: none;
     }
 }

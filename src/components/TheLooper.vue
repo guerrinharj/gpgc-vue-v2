@@ -1,4 +1,3 @@
-
 <template>
     <section class="looper" aria-label="Audio looper">
         <div class="looper-header">
@@ -99,6 +98,11 @@
             </p>
         </div>
 
+        <p class="export-info">
+            WAV EXPORT · {{ Math.round(playbackRate * 100) }}% SPEED ·
+            {{ originalBpm ? `${Math.round(originalBpm * playbackRate)} BPM` : 'BPM UNAVAILABLE' }}
+        </p>
+
         <div class="actions">
             <button
                 type="button"
@@ -140,14 +144,14 @@
 </template>
 
 <script>
-import {
+    import {
     computed,
     onBeforeUnmount,
     ref,
     watch,
 } from 'vue';
 
-export default {
+        export default {
     name: 'TheLooper',
 
     props: {
@@ -182,6 +186,10 @@ export default {
         playbackRate: {
             type: Number,
             default: 1,
+        },
+        originalBpm: {
+            type: Number,
+            default: null,
         },
     },
 
@@ -837,7 +845,7 @@ export default {
             stopMonitoring();
 
             if (direction.value === 'forward') {
-                props.audioElement?.pause();
+            props.audioElement?.pause();
             } else {
                 playbackOffset = currentBufferOffset();
                 stopSource();
@@ -991,9 +999,43 @@ export default {
             error.value = '';
         }
 
+        function applyExportPlaybackRate(context, inputBuffer, rate) {
+            const safeRate = Number.isFinite(rate)
+                ? Math.max(0.01, rate)
+                : 1;
+
+            if (Math.abs(safeRate - 1) < 0.000001) {
+                return inputBuffer;
+            }
+
+            const length = Math.max(1, Math.round(inputBuffer.length / safeRate));
+            const output = context.createBuffer(
+                inputBuffer.numberOfChannels,
+                length,
+                inputBuffer.sampleRate
+            );
+
+            for (let channel = 0; channel < inputBuffer.numberOfChannels; channel++) {
+                const source = inputBuffer.getChannelData(channel);
+                const target = output.getChannelData(channel);
+
+                for (let index = 0; index < length; index++) {
+                    const position = Math.min(index * safeRate, source.length - 1);
+                    const left = Math.floor(position);
+                    const right = Math.min(left + 1, source.length - 1);
+                    const fraction = position - left;
+
+                    target[index] = source[left] * (1 - fraction) +
+                        source[right] * fraction;
+                }
+            }
+
+            return output;
+        }
+
         function writeString(view, offset, value) {
             for (let index = 0; index < value.length; index++) {
-                view.setUint8(offset + index, value.charCodeAt(index));
+            view.setUint8(offset + index, value.charCodeAt(index));
             }
         }
 
@@ -1071,6 +1113,11 @@ export default {
             const selectedDirection = direction.value;
             const sourceUrl = props.sourceUrl;
             const trackName = props.trackName;
+            const exportRate = Math.max(0.01, props.playbackRate || 1);
+            const exportBpm = Number.isFinite(props.originalBpm) &&
+                props.originalBpm > 0
+                ? Math.round(props.originalBpm * exportRate)
+                : null;
 
             const requestId = ++exportRequestId;
             const controller = new AbortController();
@@ -1107,7 +1154,12 @@ export default {
                         selectedDirection
                     );
 
-                    const wav = encodeWav(output);
+                    const renderedOutput = applyExportPlaybackRate(
+                        context,
+                        output,
+                        exportRate
+                    );
+                    const wav = encodeWav(renderedOutput);
                     const url = URL.createObjectURL(wav);
 
                     const filename = trackName
@@ -1123,7 +1175,10 @@ export default {
                     const link = document.createElement('a');
 
                     link.href = url;
-                    link.download = `${filename}-${suffix}.wav`;
+                    const bpmSuffix = exportBpm === null
+                        ? ''
+                        : `-${exportBpm}bpm`;
+                    link.download = `${filename}-${suffix}${bpmSuffix}.wav`;
 
                     document.body.appendChild(link);
                     link.click();
@@ -1247,7 +1302,7 @@ export default {
 </script>
 
 <style scoped>
-.looper {
+        .looper {
     grid-column: 1 / -1;
     border-top: 1px solid #555;
     padding-top: 18px;
@@ -1255,7 +1310,7 @@ export default {
     color: #fff;
 }
 
-.looper-header {
+    .looper-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1264,13 +1319,13 @@ export default {
     letter-spacing: -0.5px;
 }
 
-.looper-header span {
+    .looper-header span {
     color: #999;
     font-size: 10px;
     letter-spacing: 0.5px;
 }
 
-.description {
+    .description {
     color: #999;
     font-size: 11px;
     line-height: 1.5;
@@ -1278,7 +1333,7 @@ export default {
     letter-spacing: 0;
 }
 
-.waveform {
+    .waveform {
     position: relative;
     display: flex;
     align-items: center;
@@ -1290,23 +1345,23 @@ export default {
     touch-action: none;
 }
 
-.waveform.disabled {
+    .waveform.disabled {
     opacity: 0.35;
     cursor: default;
 }
 
-.waveform-bar {
+    .waveform-bar {
     flex: 1;
     min-width: 1px;
     background: #555;
     pointer-events: none;
 }
 
-.waveform-bar.selected {
+    .waveform-bar.selected {
     background: #fff;
 }
 
-.selection {
+    .selection {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -1316,7 +1371,7 @@ export default {
     pointer-events: none;
 }
 
-.playhead {
+    .playhead {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -1325,7 +1380,7 @@ export default {
     pointer-events: none;
 }
 
-.time-labels {
+    .time-labels {
     display: flex;
     justify-content: space-between;
     color: #999;
@@ -1333,27 +1388,27 @@ export default {
     margin-top: 6px;
 }
 
-.point-controls {
+    .point-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
     margin-top: 20px;
 }
 
-.point-controls label {
+    .point-controls label {
     display: flex;
     flex-direction: column;
     gap: 8px;
     min-width: 0;
 }
 
-.point-controls label span {
+    .point-controls label span {
     color: #999;
     font-size: 10px;
     letter-spacing: 0.3px;
 }
 
-.point-controls input {
+    .point-controls input {
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
@@ -1366,11 +1421,11 @@ export default {
     font-size: 13px;
 }
 
-.point-controls input:focus-visible {
+    .point-controls input:focus-visible {
     outline: 1px solid #fff;
 }
 
-.loop-length {
+    .loop-length {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1380,25 +1435,25 @@ export default {
     padding-top: 14px;
 }
 
-.loop-length span {
+    .loop-length span {
     color: #999;
     font-size: 10px;
     letter-spacing: 0.3px;
 }
 
-.loop-length strong {
+    .loop-length strong {
     font-size: 15px;
     font-weight: 400;
     font-variant-numeric: tabular-nums;
 }
 
-.direction-section {
+    .direction-section {
     border-top: 1px solid #333;
     margin-top: 22px;
     padding-top: 16px;
 }
 
-.direction-header {
+    .direction-header {
     display: flex;
     justify-content: space-between;
     gap: 10px;
@@ -1408,17 +1463,17 @@ export default {
     letter-spacing: 0.3px;
 }
 
-.direction-header span:last-child {
+    .direction-header span:last-child {
     color: #fff;
 }
 
-.direction-controls {
+    .direction-controls {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
 }
 
-.direction-controls button {
+    .direction-controls button {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1437,43 +1492,50 @@ export default {
     transition: background 150ms ease, color 150ms ease;
 }
 
-.direction-controls button:hover:not(:disabled) {
+    .direction-controls button:hover:not(:disabled) {
     border-color: #fff;
     color: #fff;
 }
 
-.direction-controls button.active {
+    .direction-controls button.active {
     background: #fff;
     border-color: #fff;
     color: #000;
 }
 
-.direction-controls button:disabled {
+    .direction-controls button:disabled {
     opacity: 0.4;
     cursor: default;
 }
 
-.direction-icon {
+    .direction-icon {
     font-family: Arial, sans-serif;
     font-size: 24px;
     line-height: 1;
 }
 
-.direction-description {
+    .direction-description {
     margin: 10px 0 0;
     color: #777;
     font-size: 10px;
     line-height: 1.5;
 }
 
-.actions {
+    .export-info {
+    margin: 18px 0 0;
+    color: #999;
+    font-size: 10px;
+    letter-spacing: 0.2px;
+}
+
+    .actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
     margin-top: 20px;
 }
 
-.actions button {
+    .actions button {
     min-height: 40px;
     padding: 9px 5px;
     background: #000;
@@ -1485,18 +1547,18 @@ export default {
     cursor: pointer;
 }
 
-.actions button.active,
-.actions button:hover:not(:disabled) {
+    .actions button.active,
+        .actions button:hover:not(:disabled) {
     background: #fff;
     color: #000;
 }
 
-.actions button:disabled {
+    .actions button:disabled {
     opacity: 0.4;
     cursor: default;
 }
 
-.reset-button {
+    .reset-button {
     display: block;
     margin-top: 15px;
     padding: 0;
@@ -1510,12 +1572,12 @@ export default {
     cursor: pointer;
 }
 
-.reset-button:disabled {
+    .reset-button:disabled {
     opacity: 0.4;
     cursor: default;
 }
 
-.error {
+    .error {
     margin-top: 12px;
     color: #ff9999;
     font-size: 11px;
