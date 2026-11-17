@@ -22,6 +22,7 @@
                     @click="openEntry(entry)"
                 >
                     <strong>{{ entry.name }}</strong>
+
                     <span v-if="subtitle(entry)">
                         {{ subtitle(entry) }}
                     </span>
@@ -52,7 +53,10 @@
             </span>
         </div>
 
-        <div class="spatial-arrows" aria-label="Navigate catalog">
+        <div
+            class="spatial-arrows"
+            aria-label="Navigate catalog"
+        >
             <button
                 type="button"
                 aria-label="Older entry"
@@ -75,9 +79,14 @@
             class="spatial-empty"
             role="status"
         >
-            <p>Nothing to display in {{ sectionLabel }}.</p>
+            <p>
+                Nothing to display in {{ sectionLabel }}.
+            </p>
 
-            <button type="button" @click="fetchSection">
+            <button
+                type="button"
+                @click="fetchSection"
+            >
                 Retry
             </button>
         </div>
@@ -292,8 +301,6 @@ export default {
                         ? event.deltaY * scene.value.clientHeight
                         : event.deltaY;
 
-            // Sensibilidade do scroll.
-            // Quanto maior o divisor, mais lento o movimento.
             const amount = delta / 240;
 
             move(destination - amount);
@@ -424,14 +431,13 @@ export default {
                     continue;
                 }
 
-                // Progresso do título atravessando a câmera.
                 const exitProgress = clamp(
                     -depth / 1.35,
                     0,
                     1
                 );
 
-                // Opacidade do título durante a aproximação.
+                // Mantém o título visível durante o zoom.
                 const opacity = depth < 0
                     ? Math.pow(
                         1 - exitProgress,
@@ -451,7 +457,6 @@ export default {
 
                 const seed = visualSeed(index);
 
-                // Flutuação horizontal.
                 const floatX = motionReduced
                     ? 0
                     : Math.sin(
@@ -460,7 +465,6 @@ export default {
                             seed[1] * 6.28
                     ) * (5 + seed[2] * 6);
 
-                // Flutuação vertical.
                 const floatY = motionReduced
                     ? 0
                     : Math.cos(
@@ -479,7 +483,6 @@ export default {
                     floatY +
                     pointerY * 3;
 
-                // Rotação no plano da tela.
                 const rotation = motionReduced
                     ? 0
                     : Math.sin(
@@ -487,7 +490,6 @@ export default {
                         seed[0] * 6.28
                     ) * (2 + seed[1] * 3);
 
-                // Rotação horizontal 3D.
                 const tilt = motionReduced
                     ? 0
                     : Math.cos(
@@ -495,7 +497,6 @@ export default {
                         seed[1] * 6.28
                     ) * (2 + seed[2] * 4);
 
-                // Inclinação horizontal.
                 const skew = motionReduced
                     ? 0
                     : Math.sin(
@@ -503,10 +504,10 @@ export default {
                         seed[2] * 6.28
                     ) * (1 + seed[0] * 2);
 
-                // Profundidade no eixo Z.
+                // Profundidade dos títulos futuros.
                 const z = depth < 0
-                    ? exitProgress * 2000
-                    : -depth * 390;
+                    ? exitProgress * 760
+                    : -depth * 650;
 
                 // Zoom máximo de 9x.
                 const scale = depth < 0
@@ -886,6 +887,8 @@ export default {
     text-decoration: underline;
 }
 
+/* DESKTOP SCROLLBAR */
+
 .spatial-scrollbar {
     position: absolute;
     z-index: 12;
@@ -973,6 +976,8 @@ export default {
     text-decoration: underline;
 }
 
+/* MOBILE */
+
 @media (max-width: 768px) {
     .spatial-release {
         top: 44%;
@@ -981,19 +986,37 @@ export default {
         padding: 0.8rem;
     }
 
-    .spatial-arrows {
-        right: 16px;
-        bottom: 106px;
-    }
-
+    /* Barra menor no canto superior direito */
     .spatial-scrollbar {
-        right: 32px;
-        top: 22%;
-        bottom: 32%;
+        right: 24px;
+        top: calc(32px + env(safe-area-inset-top, 0px));
+        bottom: auto;
+        width: 24px;
+        height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .spatial-scroll-range {
-        width: min(32vh, 240px);
+        width: 120px;
+        height: 2px;
+        transform: rotate(90deg);
+        transform-origin: center;
+    }
+
+    .spatial-scroll-count {
+        bottom: -22px;
+        font-size: 10px;
+        letter-spacing: 0;
+    }
+
+    /* Setas abaixo da barra */
+    .spatial-arrows {
+        right: 20px;
+        top: calc(192px + env(safe-area-inset-top, 0px));
+        bottom: auto;
+        gap: 8px;
     }
 
     .spatial-arrows button {
