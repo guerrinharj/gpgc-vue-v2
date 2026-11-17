@@ -505,7 +505,7 @@ export default {
 
                 // Profundidade no eixo Z.
                 const z = depth < 0
-                    ? exitProgress * 760
+                    ? exitProgress * 2000
                     : -depth * 390;
 
                 // Zoom máximo de 9x.

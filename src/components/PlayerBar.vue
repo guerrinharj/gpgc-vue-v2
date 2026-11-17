@@ -205,7 +205,7 @@ export default {
 .audio-player {
     position: fixed; z-index: 40; left: 4vh; bottom: 4vh; width: min(350px, calc(100vw - 8vh));
     max-height: min(60dvh, 430px); overflow-y: auto; background: #000; color: #fff;
-    padding: 16px 0 0; border-top: 1px solid #fff; letter-spacing: -1px;
+    padding: 16px 0 0; border: solid 1px white ; letter-spacing: -1px;  padding: 20px;
 }
 .player-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .current-track { min-width: 0; flex: 1; display: flex; flex-direction: column; font-size: 18px; line-height: 1.15; }
