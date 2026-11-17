@@ -173,6 +173,29 @@ const clamp = (value, min, max) => {
     return Math.min(max, Math.max(min, value));
 };
 
+// CONFIGURAÇÃO DO MOVIMENTO ESPACIAL X + Z
+const SPATIAL = {
+    depthSpacing: 5650,
+    exitDepth: 1760,
+    zoomStrength: 8,
+    zoomExponent: 1.35,
+    opacityExponent: 0.7,
+
+    // Intensidade do deslocamento horizontal.
+    horizontalThrow: 75,
+
+    // Multiplicador do arremesso na saída.
+    throwMultiplier: 4.5,
+
+    // Intensidade lateral dos títulos ao fundo.
+    incomingSpread: 0.75,
+
+    // Rotação extra ao atravessar a câmera.
+    exitRotation: 16,
+    exitTilt: 22,
+    exitSkew: 5,
+};
+
 export default {
     name: 'SpatialPage',
 
@@ -417,7 +440,7 @@ export default {
 
                 if (
                     depth < -1.35 ||
-                    depth > 1.22
+                    depth > 1.5
                 ) {
                     element.style.visibility = 'hidden';
                     element.style.pointerEvents = 'none';
@@ -431,21 +454,53 @@ export default {
                     continue;
                 }
 
+                // Progresso de saída pela câmera.
                 const exitProgress = clamp(
                     -depth / 1.35,
                     0,
                     1
                 );
 
-                // Mantém o título visível durante o zoom.
+                // Progresso de entrada pelo fundo.
+                const enterProgress = clamp(
+                    depth / 1.5,
+                    0,
+                    1
+                );
+
+                // Alternância entre esquerda e direita.
+                const side = index % 2 === 0 ? -1 : 1;
+
+                // MOVIMENTO HORIZONTAL
+                //
+                // Ao fundo:
+                // o título entra ligeiramente deslocado.
+                //
+                // Ao sair:
+                // o título é arremessado lateralmente.
+                const horizontalDrift = depth < 0
+                    ? (
+                        side *
+                        SPATIAL.horizontalThrow *
+                        Math.pow(exitProgress, 0.9) *
+                        SPATIAL.throwMultiplier
+                    )
+                    : (
+                        -side *
+                        SPATIAL.horizontalThrow *
+                        Math.pow(enterProgress, 1.1) *
+                        SPATIAL.incomingSpread
+                    );
+
+                // Opacidade dos títulos.
                 const opacity = depth < 0
                     ? Math.pow(
                         1 - exitProgress,
-                        0.7
+                        SPATIAL.opacityExponent
                     )
                     : Math.pow(
-                        Math.max(0, 1 - depth / 1.22),
-                        2.1
+                        Math.max(0, 1 - enterProgress),
+                        2
                     );
 
                 const interactive =
@@ -457,6 +512,7 @@ export default {
 
                 const seed = visualSeed(index);
 
+                // Flutuação independente.
                 const floatX = motionReduced
                     ? 0
                     : Math.sin(
@@ -473,52 +529,80 @@ export default {
                             seed[0] * 6.28
                     ) * (7 + seed[2] * 7);
 
+                // POSIÇÃO X
+                //
+                // Combina:
+                // posição original + flutuação +
+                // movimento do mouse + arremesso lateral.
                 const x =
                     position[0] * Math.min(width, 1000) +
                     floatX +
-                    pointerX * 4;
+                    pointerX * 4 +
+                    horizontalDrift;
 
+                // POSIÇÃO Y
                 const y =
                     position[1] * Math.min(height, 750) +
                     floatY +
                     pointerY * 3;
 
-                const rotation = motionReduced
+                // ROTAÇÃO
+                const rotationBase = motionReduced
                     ? 0
                     : Math.sin(
                         time * 0.00017 +
                         seed[0] * 6.28
                     ) * (2 + seed[1] * 3);
 
-                const tilt = motionReduced
+                const rotation =
+                    rotationBase +
+                    side *
+                    exitProgress *
+                    SPATIAL.exitRotation;
+
+                // ROTAÇÃO 3D
+                const tiltBase = motionReduced
                     ? 0
                     : Math.cos(
                         time * 0.00015 +
                         seed[1] * 6.28
                     ) * (2 + seed[2] * 4);
 
-                const skew = motionReduced
+                const tilt =
+                    tiltBase +
+                    side *
+                    exitProgress *
+                    SPATIAL.exitTilt;
+
+                // SKEW
+                const skewBase = motionReduced
                     ? 0
                     : Math.sin(
                         time * 0.00012 +
                         seed[2] * 6.28
                     ) * (1 + seed[0] * 2);
 
-                // Profundidade dos títulos futuros.
-                const z = depth < 0
-                    ? exitProgress * 760
-                    : -depth * 650;
+                const skew =
+                    skewBase +
+                    side *
+                    exitProgress *
+                    SPATIAL.exitSkew;
 
-                // Zoom máximo de 9x.
-                const scale = depth < 0
-                    ? 1 + 8 * Math.pow(
-                        exitProgress,
-                        1.35
-                    )
-                    : 1 - Math.min(
-                        distance,
-                        1.22
-                    ) * 0.12;
+                // PROFUNDIDADE Z
+                const z = depth < 0
+                    ? exitProgress * SPATIAL.exitDepth
+                    : -depth * SPATIAL.depthSpacing;
+
+                // ZOOM
+                const renderScale = 0.25;
+
+                const visualScale = depth < 0
+                    ? 1 +
+                        SPATIAL.zoomStrength *
+                        Math.pow(exitProgress, SPATIAL.zoomExponent)
+                    : 1 - Math.min(distance, 1.5) * 0.1;
+
+                const scale = visualScale * renderScale;
 
                 element.style.visibility = 'visible';
 
@@ -851,22 +935,32 @@ export default {
     position: absolute;
     left: 50%;
     top: 48.5%;
-    width: min(420px, 72vw);
+
+    width: max-content;
+    max-width: none;
     min-height: 86px;
+
     padding: 1.1rem 1rem;
     margin: 0;
+
     transform-origin: center;
+
     color: #fff;
     text-align: center;
-    font-size: 24px;
+
+    font-size: 96px;
     line-height: 0.98;
-    letter-spacing: -2px;
+    letter-spacing: -8px;
+
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+
     backface-visibility: hidden;
     visibility: hidden;
     opacity: 0;
+
     will-change: transform, opacity;
-    overflow-wrap: normal;
-    white-space: normal;
 }
 
 .spatial-release strong,
@@ -986,7 +1080,6 @@ export default {
         padding: 0.8rem;
     }
 
-    /* Barra menor no canto superior direito */
     .spatial-scrollbar {
         right: 24px;
         top: calc(32px + env(safe-area-inset-top, 0px));
@@ -1011,7 +1104,6 @@ export default {
         letter-spacing: 0;
     }
 
-    /* Setas abaixo da barra */
     .spatial-arrows {
         right: 20px;
         top: calc(192px + env(safe-area-inset-top, 0px));
