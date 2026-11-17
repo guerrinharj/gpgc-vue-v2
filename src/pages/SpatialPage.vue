@@ -13,20 +13,32 @@
             @pointerleave="onPointerLeave"
         >
             <div ref="space" class="spatial-space">
-                <button
-                    v-for="(entry, index) in records"
-                    :key="`${section}-${entry.id ?? entry.slug ?? index}`"
-                    class="spatial-release"
-                    type="button"
-                    :aria-label="`Open ${entry.name}${subtitle(entry) ? ' — ' + subtitle(entry) : ''}`"
-                    @click="openEntry(entry)"
-                >
-                    <strong>{{ entry.name }}</strong>
+                <template v-if="section === 'about'">
+                    <div
+                        v-for="(entry, index) in records"
+                        :key="`about-${entry.id ?? index}`"
+                        class="spatial-release spatial-paragraph"
+                    >
+                        <p v-html="entry.html"></p>
+                    </div>
+                </template>
 
-                    <span v-if="subtitle(entry)">
-                        {{ subtitle(entry) }}
-                    </span>
-                </button>
+                <template v-else>
+                    <button
+                        v-for="(entry, index) in records"
+                        :key="`${section}-${entry.id ?? entry.slug ?? index}`"
+                        class="spatial-release"
+                        type="button"
+                        :aria-label="`Open ${entry.name}${subtitle(entry) ? ' — ' + subtitle(entry) : ''}`"
+                        @click="openEntry(entry)"
+                    >
+                        <strong>{{ entry.name }}</strong>
+
+                        <span v-if="subtitle(entry)">
+                            {{ subtitle(entry) }}
+                        </span>
+                    </button>
+                </template>
             </div>
         </section>
 
@@ -92,7 +104,7 @@
         </div>
 
         <EntryModal
-            v-if="modalEntry"
+            v-if="section !== 'about' && modalEntry"
             :key="`${section}-${modalEntry.id ?? modalEntry.slug ?? modalEntry.name}`"
             :entry="modalEntry"
             :section="section"
@@ -126,10 +138,64 @@ import {
 
 import EntryModal from '@/components/EntryModal.vue';
 
-const ABOUT = {
-    id: 'about',
-    name: 'About',
-};
+const ABOUT_PARAGRAPHS = [
+    {
+        id: 'intro',
+        html: `
+            Hi, my name is
+            <b>Gabriel Pessoa Guerra Cavalcanti</b>.
+            I'm a musician, producer and web developer
+            and the purpose of this site is to catalog
+            and serve as a streaming player to everything
+            I've done related to <b>music</b>.
+        `,
+    },
+    {
+        id: 'history',
+        html: `
+            As the years went by, and I got more and more
+            cursed by this abstract entity called
+            <b>music</b>, I've made the questionable choice
+            to constantly release stuff under different
+            groups, pseudonyms, aliases, featurings,
+            soundtracks etc., making things harder to
+            catalog.
+        `,
+    },
+    {
+        id: 'labels',
+        html: `
+            I've also released under different labels
+            such as Future Times, PAN, Superconscious Records,
+            2 Headed Deer, Confuso Editions, etc and managed
+            labels such as <b>40% Foda/Maneirissimo</b>
+            and my own <b>Gpgc Discos</b>.
+        `,
+    },
+    {
+        id: 'archive',
+        html: `
+            To clarify, not everything still exists;
+            some files and links just got lost or broken,
+            but they are documented here.
+        `,
+    },
+    {
+        id: 'technology',
+        html: `
+            This website was built with <b>Vue</b>,
+            powered by a <b>Ruby on Rails API</b>.
+            You can check the source code from the front
+            <a href="https://github.com/guerrinharj/gpgc-vue"
+               target="_blank"
+               rel="noopener noreferrer">here</a>
+            and the back
+            <a href="https://github.com/guerrinharj/gpgc-api"
+               target="_blank"
+               rel="noopener noreferrer">here</a>.
+        `,
+    },
+];
 
 const POSITIONS = [
     [0, 0],
@@ -173,27 +239,34 @@ const clamp = (value, min, max) => {
     return Math.min(max, Math.max(min, value));
 };
 
-// CONFIGURAÇÃO DO MOVIMENTO ESPACIAL X + Z
 const SPATIAL = {
-    depthSpacing: 5650,
+    depthSpacing: 8000,
     exitDepth: 1760,
+
     zoomStrength: 8,
     zoomExponent: 1.35,
     opacityExponent: 0.7,
 
-    // Intensidade do deslocamento horizontal.
-    horizontalThrow: 75,
+    horizontalThrow: 50,
+    throwMultiplier: 7,
+    incomingSpread: 2.5,
 
-    // Multiplicador do arremesso na saída.
-    throwMultiplier: 4.5,
-
-    // Intensidade lateral dos títulos ao fundo.
-    incomingSpread: 0.75,
-
-    // Rotação extra ao atravessar a câmera.
     exitRotation: 16,
     exitTilt: 22,
     exitSkew: 5,
+
+    // Ajustes exclusivos do About.
+    about: {
+        depthSpacing: 4100,
+        exitDepth: 1500,
+        zoomStrength: 2.5,
+        horizontalThrow: 110,
+        throwMultiplier: 3,
+        incomingSpread: 0.6,
+        exitRotation: 5,
+        exitTilt: 7,
+        exitSkew: 1,
+    },
 };
 
 export default {
@@ -232,7 +305,7 @@ export default {
 
         const records = computed(() => {
             if (props.section === 'about') {
-                return [ABOUT];
+                return ABOUT_PARAGRAPHS;
             }
 
             const values =
@@ -428,6 +501,15 @@ export default {
             const height = scene.value.clientHeight;
             const buttons = space.value.children;
 
+            const isAbout = props.section === 'about';
+
+            const config = isAbout
+                ? {
+                    ...SPATIAL,
+                    ...SPATIAL.about,
+                }
+                : SPATIAL;
+
             for (
                 let index = 0;
                 index < buttons.length;
@@ -454,65 +536,55 @@ export default {
                     continue;
                 }
 
-                // Progresso de saída pela câmera.
                 const exitProgress = clamp(
                     -depth / 1.35,
                     0,
                     1
                 );
 
-                // Progresso de entrada pelo fundo.
                 const enterProgress = clamp(
                     depth / 1.5,
                     0,
                     1
                 );
 
-                // Alternância entre esquerda e direita.
                 const side = index % 2 === 0 ? -1 : 1;
 
-                // MOVIMENTO HORIZONTAL
-                //
-                // Ao fundo:
-                // o título entra ligeiramente deslocado.
-                //
-                // Ao sair:
-                // o título é arremessado lateralmente.
                 const horizontalDrift = depth < 0
                     ? (
                         side *
-                        SPATIAL.horizontalThrow *
+                        config.horizontalThrow *
                         Math.pow(exitProgress, 0.9) *
-                        SPATIAL.throwMultiplier
+                        config.throwMultiplier
                     )
                     : (
                         -side *
-                        SPATIAL.horizontalThrow *
+                        config.horizontalThrow *
                         Math.pow(enterProgress, 1.1) *
-                        SPATIAL.incomingSpread
+                        config.incomingSpread
                     );
 
-                // Opacidade dos títulos.
                 const opacity = depth < 0
                     ? Math.pow(
                         1 - exitProgress,
-                        SPATIAL.opacityExponent
+                        config.opacityExponent
                     )
                     : Math.pow(
                         Math.max(0, 1 - enterProgress),
                         2
                     );
 
-                const interactive =
-                    opacity > 0.35 &&
-                    Math.abs(depth) < 0.38;
+                const interactive = isAbout
+                    ? opacity > 0.35 &&
+                        Math.abs(depth) < 0.38
+                    : opacity > 0.35 &&
+                        Math.abs(depth) < 0.38;
 
                 const position =
                     POSITIONS[index % POSITIONS.length];
 
                 const seed = visualSeed(index);
 
-                // Flutuação independente.
                 const floatX = motionReduced
                     ? 0
                     : Math.sin(
@@ -529,24 +601,17 @@ export default {
                             seed[0] * 6.28
                     ) * (7 + seed[2] * 7);
 
-                // POSIÇÃO X
-                //
-                // Combina:
-                // posição original + flutuação +
-                // movimento do mouse + arremesso lateral.
                 const x =
                     position[0] * Math.min(width, 1000) +
                     floatX +
                     pointerX * 4 +
                     horizontalDrift;
 
-                // POSIÇÃO Y
                 const y =
                     position[1] * Math.min(height, 750) +
                     floatY +
                     pointerY * 3;
 
-                // ROTAÇÃO
                 const rotationBase = motionReduced
                     ? 0
                     : Math.sin(
@@ -558,9 +623,8 @@ export default {
                     rotationBase +
                     side *
                     exitProgress *
-                    SPATIAL.exitRotation;
+                    config.exitRotation;
 
-                // ROTAÇÃO 3D
                 const tiltBase = motionReduced
                     ? 0
                     : Math.cos(
@@ -572,9 +636,8 @@ export default {
                     tiltBase +
                     side *
                     exitProgress *
-                    SPATIAL.exitTilt;
+                    config.exitTilt;
 
-                // SKEW
                 const skewBase = motionReduced
                     ? 0
                     : Math.sin(
@@ -586,23 +649,28 @@ export default {
                     skewBase +
                     side *
                     exitProgress *
-                    SPATIAL.exitSkew;
+                    config.exitSkew;
 
-                // PROFUNDIDADE Z
                 const z = depth < 0
-                    ? exitProgress * SPATIAL.exitDepth
-                    : -depth * SPATIAL.depthSpacing;
-
-                // ZOOM
-                const renderScale = 0.25;
+                    ? exitProgress * config.exitDepth
+                    : -depth * config.depthSpacing;
 
                 const visualScale = depth < 0
                     ? 1 +
-                        SPATIAL.zoomStrength *
-                        Math.pow(exitProgress, SPATIAL.zoomExponent)
-                    : 1 - Math.min(distance, 1.5) * 0.1;
+                        config.zoomStrength *
+                        Math.pow(
+                            exitProgress,
+                            config.zoomExponent
+                        )
+                    : 1 -
+                        Math.min(distance, 1.5) *
+                        0.1;
 
-                const scale = visualScale * renderScale;
+                // Fonte renderizada em 4x para maior nitidez.
+                const renderScale = 0.25;
+
+                const scale =
+                    visualScale * renderScale;
 
                 element.style.visibility = 'visible';
 
@@ -613,11 +681,11 @@ export default {
                     interactive ? 'auto' : 'none';
 
                 element.tabIndex =
-                    interactive ? 0 : -1;
+                    interactive && !isAbout ? 0 : -1;
 
                 element.setAttribute(
                     'aria-hidden',
-                    interactive ? 'false' : 'true'
+                    opacity > 0.05 ? 'false' : 'true'
                 );
 
                 element.style.zIndex = String(
@@ -672,10 +740,11 @@ export default {
         }
 
         function openEntry(entry) {
-            if (
-                props.section === 'about' ||
-                !entry.slug
-            ) {
+            if (props.section === 'about') {
+                return;
+            }
+
+            if (!entry.slug) {
                 modalEntry.value = entry;
             } else {
                 router.push(
@@ -738,6 +807,11 @@ export default {
         }
 
         async function resolveDeepLink() {
+            if (props.section === 'about') {
+                modalEntry.value = null;
+                return;
+            }
+
             const slug = String(route.params.slug || '');
             const token = ++detailRequest;
 
@@ -858,9 +932,7 @@ export default {
 
             requestId = requestAnimationFrame(animate);
 
-            if (props.section === 'about') {
-                resolveDeepLink();
-            } else {
+            if (props.section !== 'about') {
                 await fetchSection();
             }
 
@@ -935,31 +1007,26 @@ export default {
     position: absolute;
     left: 50%;
     top: 48.5%;
-
     width: max-content;
     max-width: none;
     min-height: 86px;
-
     padding: 1.1rem 1rem;
     margin: 0;
-
     transform-origin: center;
-
     color: #fff;
     text-align: center;
-
     font-size: 96px;
     line-height: 0.98;
     letter-spacing: -8px;
-
     white-space: nowrap;
     overflow-wrap: normal;
     word-break: normal;
-
     backface-visibility: hidden;
+    transform-style: preserve-3d;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
     visibility: hidden;
     opacity: 0;
-
     will-change: transform, opacity;
 }
 
@@ -981,7 +1048,37 @@ export default {
     text-decoration: underline;
 }
 
-/* DESKTOP SCROLLBAR */
+/* ABOUT — PARÁGRAFOS ESPACIAIS */
+
+.spatial-paragraph {
+    width: 2600px;
+    max-width: none;
+    padding: 30px 50px;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    text-align: left;
+    font-size: 76px;
+    line-height: 1.38;
+    letter-spacing: -3px;
+    font-weight: 400;
+}
+
+.spatial-paragraph p {
+    margin: 0;
+}
+
+.spatial-paragraph :deep(b) {
+    font-weight: 700;
+}
+
+.spatial-paragraph :deep(a) {
+    color: inherit;
+    text-decoration: underline;
+    pointer-events: auto;
+}
+
+/* SCROLLBAR */
 
 .spatial-scrollbar {
     position: absolute;
@@ -1075,9 +1172,23 @@ export default {
 @media (max-width: 768px) {
     .spatial-release {
         top: 44%;
-        width: min(340px, 84vw);
-        font-size: 20px;
+        width: max-content;
+        max-width: none;
+        font-size: 80px;
+        letter-spacing: -8px;
         padding: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .spatial-paragraph {
+        top: 40%;
+        width: min(1280px, 340vw);
+        max-width: none;
+        padding: 20px 35px;
+        font-size: 64px;
+        line-height: 1.38;
+        letter-spacing: -2.5px;
+        white-space: normal;
     }
 
     .spatial-scrollbar {
@@ -1086,9 +1197,6 @@ export default {
         bottom: auto;
         width: 24px;
         height: 120px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
     }
 
     .spatial-scroll-range {
