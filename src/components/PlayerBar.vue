@@ -107,6 +107,17 @@
                 Sound settings {{ showEffects ? '−' : '+' }}
             </button>
 
+            <button
+                type="button"
+                class="looper-toggle"
+                :class="{ active: showLooper || loopActive }"
+                :aria-expanded="showLooper"
+                aria-controls="player-looper"
+                @click="showLooper = !showLooper"
+            >
+                Looper {{ showLooper ? '−' : '+' }}
+            </button>
+
             <label for="player-volume" class="volume-label">
                 Volume
 
@@ -120,6 +131,21 @@
                     @input="updateVolume"
                 />
             </label>
+        </div>
+
+        <div
+            v-show="showLooper"
+            id="player-looper"
+            class="looper-container"
+        >
+            <TheLooper
+                :audio-element="audioRef"
+                :source-url="currentTrack?.url || ''"
+                :track-name="currentTrack?.name || 'track'"
+                :duration="duration"
+                :current-time="currentTime"
+                @loop-change="onLoopChange"
+            />
         </div>
 
         <div
@@ -305,6 +331,7 @@ import {
 } from 'vuex';
 
 import StemSeparator from './StemSeparator.vue';
+import TheLooper from './TheLooper.vue';
 
 import { detectBpmFromUrl } from '@/utils/detect-bpm';
 
@@ -313,6 +340,7 @@ export default {
 
     components: {
         StemSeparator,
+        TheLooper,
     },
 
     setup() {
@@ -332,6 +360,8 @@ export default {
         const audioRef = ref(null);
         const playing = ref(false);
         const showEffects = ref(false);
+        const showLooper = ref(false);
+        const loopActive = ref(false);
 
         const currentTime = ref(0);
         const duration = ref(0);
@@ -348,11 +378,16 @@ export default {
         const bpmLoading = ref(false);
 
         let bpmRequestId = 0;
+        let trackRequestId = 0;
 
         const audioError = ref('');
 
         let audioContext = null;
         let graph = null;
+
+        function onLoopChange(active) {
+            loopActive.value = active;
+        }
 
         async function startShuffle() {
             if (shuffleLoading.value) {
@@ -474,7 +509,12 @@ export default {
         }
 
         function onMetadata() {
-            duration.value = audioRef.value?.duration || 0;
+            const value = audioRef.value?.duration;
+
+            duration.value =
+                Number.isFinite(value) && value > 0
+                    ? value
+                    : 0;
         }
 
         function onTime() {
@@ -534,6 +574,10 @@ export default {
         }
 
         function onEnded() {
+            if (loopActive.value) {
+                return;
+            }
+
             if (
                 store.state.radioMode ||
                 store.state.currentTrackIndex <
@@ -705,9 +749,16 @@ export default {
         watch(
             () => currentTrack.value?.url,
             async url => {
+                const requestId = ++trackRequestId;
+
+                loopActive.value = false;
                 analyzeBpm(url);
 
                 await nextTick();
+
+                if (requestId !== trackRequestId) {
+                    return;
+                }
 
                 const audio = audioRef.value;
 
@@ -742,6 +793,9 @@ export default {
         );
 
         onBeforeUnmount(() => {
+            trackRequestId++;
+            bpmRequestId++;
+
             audioRef.value?.pause();
             audioContext?.close().catch(() => {});
         });
@@ -755,6 +809,9 @@ export default {
             audioRef,
             playing,
             showEffects,
+            showLooper,
+            loopActive,
+            onLoopChange,
             currentTime,
             duration,
             volume,
@@ -886,15 +943,19 @@ export default {
     letter-spacing: -0.7px;
 }
 
-.volume-label {
-    display: flex;
-    align-items: center;
-    gap: 9px;
+.looper-toggle {
+    font-size: 13px;
     white-space: nowrap;
 }
 
-.volume-label input {
-    width: 65px;
+.looper-toggle.active {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+.looper-container {
+    border-top: 1px solid #555;
+    margin-top: 15px;
 }
 
 .player-effects {
@@ -922,6 +983,17 @@ export default {
 
 .player-effects input {
     width: 100%;
+}
+
+.volume-label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    white-space: nowrap;
+}
+
+.volume-label input {
+    width: 65px;
 }
 
 .vinyl-section {
