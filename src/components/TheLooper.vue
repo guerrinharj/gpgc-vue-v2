@@ -1,4 +1,3 @@
-
 <template>
     <section class="looper" aria-label="Audio looper">
         <div class="looper-header">
@@ -23,6 +22,133 @@
                             : 'START LOOP'
                 }}
             </button>
+        </div>
+        <div class="waveform-zoom">
+            <span>WAVEFORM ZOOM</span>
+            <div class="waveform-zoom-buttons">
+                <button type="button" :disabled="!hasTrack || zoomLevel <= 1" @click="zoomOut" aria-label="Zoom out">−</button>
+                <strong>{{ zoomLevel.toFixed(1) }}×</strong>
+                <button type="button" :disabled="!hasTrack || zoomLevel >= 64" @click="zoomIn" aria-label="Zoom in">+</button>
+                <button type="button" :disabled="!hasTrack || zoomLevel === 1" @click="resetZoom">FIT</button>
+            </div>
+        </div>
+        <input
+            v-if="zoomLevel > 1"
+            v-model.number="viewStart"
+            class="waveform-pan"
+            type="range"
+            :min="0"
+            :max="Math.max(0, duration - visibleDuration)"
+            :step="Math.max(0.001, visibleDuration / 500)"
+            aria-label="Pan zoomed waveform"
+        />
+        <div
+            ref="waveformRef"
+            class="waveform"
+            :class="{ disabled: !hasTrack }"
+            @pointerdown="onPointerDown"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+        >
+            <div
+                v-for="(height, index) in visibleWaveform"
+                :key="index"
+                class="waveform-bar"
+                :class="{ selected: isVisibleSelected(index) }"
+                :style="{ height: `${height}%` }"
+            ></div>
+            <div
+                class="selection"
+                :style="selectionStyle"
+            ></div>
+            <div
+                class="playhead"
+                :style="{ left: `${playheadPercent}%` }"
+            ></div>
+        </div>
+        <div class="time-labels">
+            <span>{{ formatPreciseTime(viewStart) }}</span>
+            <span>{{ formatPreciseTime(viewStart + visibleDuration) }}</span>
+        </div>
+        <div class="keyboard-section">
+            <div class="keyboard-header">
+                <span>KEYBOARD CONTROL</span>
+                <span>{{ loopEnabled ? 'ENABLED' : 'STANDBY' }}</span>
+            </div>
+            <div class="position-controls">
+                <button
+                    v-for="position in positions"
+                    :key="position.key"
+                    type="button"
+                    :disabled="!hasTrack"
+                    :class="{
+                        active: activePosition === position.index
+                    }"
+                    :aria-label="`Move loop to ${position.percent}%`"
+                    @click="moveLoopToPosition(position.index)"
+                >
+                    {{ position.key }}
+                </button>
+            </div>
+            <p class="keyboard-description">
+                1–9 / 0 — Move loop start in 10% increments.
+            </p>
+            <div class="pitch-header">
+                <span>PITCH / SPEED</span>
+                <strong>{{ formattedPitch }}</strong>
+            </div>
+            <div class="pitch-step-panel">
+                <div class="pitch-step-header">
+                    <label for="looper-pitch-step">PITCH STEP</label>
+                    <strong>{{ pitchStep }} <span>ST</span></strong>
+                </div>
+                <input
+                    id="looper-pitch-step"
+                    v-model.number="pitchStep"
+                    class="pitch-step-slider"
+                    type="range"
+                    min="1"
+                    max="12"
+                    step="1"
+                    :style="{ '--pitch-progress': `${((pitchStep - 1) / 11) * 100}%` }"
+                    aria-label="Semitones per pitch change"
+                />
+                <div class="pitch-step-scale">
+                    <span>1 ST</span>
+                    <span>12 ST</span>
+                </div>
+            </div>
+            <div class="pitch-controls">
+                <button
+                    type="button"
+                    :disabled="!hasTrack || pitchSemitones <= -12"
+                    :aria-label="`Decrease pitch by ${pitchStep} semitones`"
+                    @click="changePitch(-pitchStep)"
+                >
+                    −
+                </button>
+                <button
+                    type="button"
+                    :disabled="!hasTrack || pitchSemitones === 0"
+                    class="pitch-reset"
+                    @click="resetPitch"
+                >
+                    RESET
+                </button>
+                <button
+                    type="button"
+                    :disabled="!hasTrack || pitchSemitones >= 12"
+                    :aria-label="`Increase pitch by ${pitchStep} semitones`"
+                    @click="changePitch(pitchStep)"
+                >
+                    +
+                </button>
+            </div>
+            <p class="keyboard-description">
+                + / − — Change pitch by {{ pitchStep }} semitones.
+                Shift + 0 — Reset pitch.
+            </p>
         </div>
         <div class="looper-effects">
             <div class="looper-effects-heading"><strong>LOOP EFFECTS</strong><span>LIVE + WAV EXPORT</span></div>
@@ -147,54 +273,6 @@
                         </label>
                     </div>
         </div>
-        <div class="waveform-zoom">
-            <span>WAVEFORM ZOOM</span>
-            <div class="waveform-zoom-buttons">
-                <button type="button" :disabled="!hasTrack || zoomLevel <= 1" @click="zoomOut" aria-label="Zoom out">−</button>
-                <strong>{{ zoomLevel.toFixed(1) }}×</strong>
-                <button type="button" :disabled="!hasTrack || zoomLevel >= 64" @click="zoomIn" aria-label="Zoom in">+</button>
-                <button type="button" :disabled="!hasTrack || zoomLevel === 1" @click="resetZoom">FIT</button>
-            </div>
-        </div>
-        <input
-            v-if="zoomLevel > 1"
-            v-model.number="viewStart"
-            class="waveform-pan"
-            type="range"
-            :min="0"
-            :max="Math.max(0, duration - visibleDuration)"
-            :step="Math.max(0.001, visibleDuration / 500)"
-            aria-label="Pan zoomed waveform"
-        />
-        <div
-            ref="waveformRef"
-            class="waveform"
-            :class="{ disabled: !hasTrack }"
-            @pointerdown="onPointerDown"
-            @pointermove="onPointerMove"
-            @pointerup="onPointerUp"
-            @pointercancel="onPointerUp"
-        >
-            <div
-                v-for="(height, index) in visibleWaveform"
-                :key="index"
-                class="waveform-bar"
-                :class="{ selected: isVisibleSelected(index) }"
-                :style="{ height: `${height}%` }"
-            ></div>
-            <div
-                class="selection"
-                :style="selectionStyle"
-            ></div>
-            <div
-                class="playhead"
-                :style="{ left: `${playheadPercent}%` }"
-            ></div>
-        </div>
-        <div class="time-labels">
-            <span>{{ formatPreciseTime(viewStart) }}</span>
-            <span>{{ formatPreciseTime(viewStart + visibleDuration) }}</span>
-        </div>
         <div class="point-controls">
             <label>
                 <span>START / A</span>
@@ -272,85 +350,6 @@
             <p class="envelope-description">
                 Drag the two white points to shape every loop cycle.
                 Changes are applied to playback and WAV export.
-            </p>
-        </div>
-        <div class="keyboard-section">
-            <div class="keyboard-header">
-                <span>KEYBOARD CONTROL</span>
-                <span>{{ loopEnabled ? 'ENABLED' : 'STANDBY' }}</span>
-            </div>
-            <div class="position-controls">
-                <button
-                    v-for="position in positions"
-                    :key="position.key"
-                    type="button"
-                    :disabled="!hasTrack"
-                    :class="{
-                        active: activePosition === position.index
-                    }"
-                    :aria-label="`Move loop to ${position.percent}%`"
-                    @click="moveLoopToPosition(position.index)"
-                >
-                    {{ position.key }}
-                </button>
-            </div>
-            <p class="keyboard-description">
-                1–9 / 0 — Move loop start in 10% increments.
-            </p>
-            <div class="pitch-header">
-                <span>PITCH / SPEED</span>
-                <strong>{{ formattedPitch }}</strong>
-            </div>
-            <div class="pitch-step-panel">
-                <div class="pitch-step-header">
-                    <label for="looper-pitch-step">PITCH STEP</label>
-                    <strong>{{ pitchStep }} <span>ST</span></strong>
-                </div>
-                <input
-                    id="looper-pitch-step"
-                    v-model.number="pitchStep"
-                    class="pitch-step-slider"
-                    type="range"
-                    min="1"
-                    max="12"
-                    step="1"
-                    :style="{ '--pitch-progress': `${((pitchStep - 1) / 11) * 100}%` }"
-                    aria-label="Semitones per pitch change"
-                />
-                <div class="pitch-step-scale">
-                    <span>1 ST</span>
-                    <span>12 ST</span>
-                </div>
-            </div>
-            <div class="pitch-controls">
-                <button
-                    type="button"
-                    :disabled="!hasTrack || pitchSemitones <= -12"
-                    :aria-label="`Decrease pitch by ${pitchStep} semitones`"
-                    @click="changePitch(-pitchStep)"
-                >
-                    −
-                </button>
-                <button
-                    type="button"
-                    :disabled="!hasTrack || pitchSemitones === 0"
-                    class="pitch-reset"
-                    @click="resetPitch"
-                >
-                    RESET
-                </button>
-                <button
-                    type="button"
-                    :disabled="!hasTrack || pitchSemitones >= 12"
-                    :aria-label="`Increase pitch by ${pitchStep} semitones`"
-                    @click="changePitch(pitchStep)"
-                >
-                    +
-                </button>
-            </div>
-            <p class="keyboard-description">
-                + / − — Change pitch by {{ pitchStep }} semitones.
-                Shift + 0 — Reset pitch.
             </p>
         </div>
         <div class="direction-section">
@@ -2479,4 +2478,65 @@ value.charCodeAt(index)
     .dual-filter-grid { grid-template-columns: 1fr; }
     .echo-controls { grid-template-columns: 1fr; }
 }
+
+/* Monochrome faders for the Dual Filter, Echo and waveform navigation. */
+.looper-effects input[type="range"],
+.waveform-pan {
+    display: block;
+    width: 100%;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    accent-color: #fff;
+    cursor: pointer;
+}
+.looper-effects input[type="range"]::-webkit-slider-runnable-track,
+.waveform-pan::-webkit-slider-runnable-track {
+    height: 3px;
+    border: 0;
+    border-radius: 0;
+    background: linear-gradient(to right, #fff 0%, #fff var(--range-progress, 0%), #555 var(--range-progress, 0%), #555 100%);
+}
+.looper-effects input[type="range"]::-moz-range-track,
+.waveform-pan::-moz-range-track {
+    height: 3px;
+    border: 0;
+    border-radius: 0;
+    background: #555;
+}
+.looper-effects input[type="range"]::-moz-range-progress,
+.waveform-pan::-moz-range-progress {
+    height: 3px;
+    background: #fff;
+}
+.looper-effects input[type="range"]::-webkit-slider-thumb,
+.waveform-pan::-webkit-slider-thumb {
+    width: 11px;
+    height: 16px;
+    margin-top: -6.5px;
+    border: 1px solid #fff;
+    border-radius: 0;
+    background: #fff;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.looper-effects input[type="range"]::-moz-range-thumb,
+.waveform-pan::-moz-range-thumb {
+    width: 11px;
+    height: 16px;
+    border: 1px solid #fff;
+    border-radius: 0;
+    background: #fff;
+}
+.looper-effects input[type="range"]:focus-visible,
+.waveform-pan:focus-visible {
+    outline: 1px solid #fff;
+    outline-offset: 3px;
+}
+
 </style>
