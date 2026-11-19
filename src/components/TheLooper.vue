@@ -67,6 +67,55 @@
             <span>LOOP LENGTH</span>
             <strong>{{ formatPreciseTime(loopLength) }}</strong>
         </div>
+        <div class="envelope-section">
+            <div class="envelope-header">
+                <span>LOOP ENVELOPE</span>
+                <span>PER CYCLE</span>
+            </div>
+            <div
+                ref="envelopeRef"
+                class="envelope-graph"
+                :class="{ disabled: !hasTrack }"
+                @pointerdown="onEnvelopePointerDown"
+                @pointermove="onEnvelopePointerMove"
+                @pointerup="onEnvelopePointerUp"
+                @pointercancel="onEnvelopePointerUp"
+                @lostpointercapture="onEnvelopePointerUp"
+            >
+                <svg viewBox="0 0 320 140" preserveAspectRatio="none" aria-label="Drag envelope points to set attack and release">
+                    <path
+                        v-for="line in [30, 60, 90, 120]"
+                        :key="`h-${line}`"
+                        :d="`M 0 ${line} H 320`"
+                        class="envelope-grid-line"
+                    />
+                    <path
+                        v-for="line in [64, 128, 192, 256]"
+                        :key="`v-${line}`"
+                        :d="`M ${line} 0 V 140`"
+                        class="envelope-grid-line"
+                    />
+                    <path :d="envelopeFillPath" class="envelope-fill" />
+                    <path :d="envelopeLinePath" class="envelope-line" />
+                    <circle :cx="envelopeAttackX" cy="16" r="7" class="envelope-handle" />
+                    <circle :cx="envelopeReleaseX" cy="16" r="7" class="envelope-handle" />
+                </svg>
+            </div>
+            <div class="envelope-values">
+                <div>
+                    <span>ATTACK</span>
+                    <strong>{{ attackMs }} MS</strong>
+                </div>
+                <div>
+                    <span>RELEASE</span>
+                    <strong>{{ releaseMs }} MS</strong>
+                </div>
+            </div>
+            <p class="envelope-description">
+                Drag the two white points to shape every loop cycle.
+                Changes are applied to playback and WAV export.
+            </p>
+        </div>
         <div class="keyboard-section">
             <div class="keyboard-header">
                 <span>KEYBOARD CONTROL</span>
@@ -274,6 +323,11 @@ export default {
         const direction = ref('forward');
         const pitchSemitones = ref(0);
         const pitchStep = ref(3);
+        const attackMs = ref(50);
+        const envelopeRef = ref(null);
+        let envelopePointer = null;
+        let envelopeHandle = null;
+        const releaseMs = ref(100);
         const loopEnabled = ref(false);
         const loopPlaying = ref(false);
         const preparing = ref(false);
@@ -346,6 +400,53 @@ export default {
         const loopLength = computed(() => {
             return Math.max(0, end.value - start.value);
         });
+        const envelopeAttackX = computed(() => {
+            const durationMs = Math.max(1, loopLength.value * 1000);
+            return Math.min(320, attackMs.value / durationMs * 320);
+        });
+        const envelopeReleaseX = computed(() => {
+            const durationMs = Math.max(1, loopLength.value * 1000);
+            return Math.max(0, 320 - releaseMs.value / durationMs * 320);
+        });
+        const envelopeLinePath = computed(() =>
+            `M 0 120 L ${envelopeAttackX.value} 16 L ${envelopeReleaseX.value} 16 L 320 120`
+        );
+        const envelopeFillPath = computed(() => `${envelopeLinePath.value} L 0 120 Z`);
+        function envelopeXFromEvent(event) {
+            const rect = envelopeRef.value.getBoundingClientRect();
+            return Math.max(0, Math.min(320, (event.clientX - rect.left) / rect.width * 320));
+        }
+        function onEnvelopePointerDown(event) {
+            if (!hasTrack.value) return;
+            const x = envelopeXFromEvent(event);
+            envelopeHandle = Math.abs(x - envelopeAttackX.value) <= Math.abs(x - envelopeReleaseX.value)
+                ? 'attack' : 'release';
+            envelopePointer = event.pointerId;
+            envelopeRef.value.setPointerCapture(event.pointerId);
+            onEnvelopePointerMove(event);
+        }
+        function onEnvelopePointerMove(event) {
+            if (event.pointerId !== envelopePointer || !envelopeHandle) return;
+            const x = envelopeXFromEvent(event);
+            const durationMs = loopLength.value * 1000;
+            if (envelopeHandle === 'attack') {
+                attackMs.value = Math.max(0, Math.min(
+                    1000, Math.round(Math.min(x, envelopeReleaseX.value) / 320 * durationMs / 10) * 10
+                ));
+            } else {
+                releaseMs.value = Math.max(0, Math.min(
+                    1000, Math.round((320 - Math.max(x, envelopeAttackX.value)) / 320 * durationMs / 10) * 10
+                ));
+            }
+        }
+        function onEnvelopePointerUp(event) {
+            if (event.pointerId !== envelopePointer) return;
+            if (envelopeRef.value?.hasPointerCapture(event.pointerId)) {
+                envelopeRef.value.releasePointerCapture(event.pointerId);
+            }
+            envelopePointer = null;
+            envelopeHandle = null;
+        }
         const pitchFactor = computed(() => {
             return Math.pow(2, pitchSemitones.value / 12);
         });
@@ -694,20 +795,6 @@ Number(end.value) || maximum,
                 : 1;
             audio.playbackRate = Math.max(0.01, rate);
         }
-        function applyAudioRate() {
-            const audio = props.audioElement;
-            if (
-                !audio ||
-                !loopEnabled.value ||
-                direction.value !== 'forward'
-            ) {
-                return;
-            }
-            audio.playbackRate = Math.max(
-                0.01,
-                effectiveRate.value
-            );
-        }
         function stopLoop() {
             playbackRequestId++;
             playbackController?.abort();
@@ -723,35 +810,6 @@ Number(end.value) || maximum,
             if (wasEnabled) {
                 emit('loop-change', false);
             }
-        }
-        function enforceForward() {
-            if (
-                !loopEnabled.value ||
-                !props.audioElement ||
-                direction.value !== 'forward'
-            ) {
-                return;
-            }
-            const audio = props.audioElement;
-            if (
-                audio.currentTime < start.value ||
-                audio.currentTime >= end.value
-            ) {
-                audio.currentTime = start.value;
-            }
-        }
-        function monitorForward() {
-            if (
-                !loopEnabled.value ||
-                !loopPlaying.value ||
-                direction.value !== 'forward'
-            ) {
-                stopMonitoring();
-                return;
-            }
-            enforceForward();
-            animationFrame =
-                requestAnimationFrame(monitorForward);
         }
         function currentBufferOffset() {
             if (!props.audioContext || !bufferDuration) {
@@ -773,6 +831,9 @@ Number(end.value) || maximum,
             const length = playbackEnd - playbackStart;
             if (length <= 0) {
                 return playbackStart;
+            }
+            if (playbackDirection === 'forward') {
+                return playbackStart + (offset % length);
             }
             if (playbackDirection === 'reverse') {
                 return playbackEnd - Math.min(
@@ -925,7 +986,27 @@ selectedDirection === 'pingpong'
                     }
                 }
             }
+            applyEnvelope(output);
             return output;
+        }
+        function applyEnvelope(buffer, rate = effectiveRate.value, attack = attackMs.value, release = releaseMs.value) {
+            const samples = buffer.length;
+            const sampleRate = buffer.sampleRate;
+            const safeRate = Math.max(0.01, rate);
+            const attackSamples = Math.min(samples, Math.round(attack / 1000 * sampleRate * safeRate));
+            const releaseSamples = Math.min(samples, Math.round(release / 1000 * sampleRate * safeRate));
+            const total = attackSamples + releaseSamples;
+            const factor = total > samples ? samples / total : 1;
+            const fadeIn = Math.floor(attackSamples * factor);
+            const fadeOut = Math.floor(releaseSamples * factor);
+            for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+                const data = buffer.getChannelData(channel);
+                for (let index = 0; index < samples; index++) {
+                    const inGain = fadeIn > 0 ? Math.min(1, index / fadeIn) : 1;
+                    const outGain = fadeOut > 0 ? Math.min(1, (samples - 1 - index) / fadeOut) : 1;
+                    data[index] *= Math.max(0, Math.min(inGain, outGain));
+                }
+            }
         }
         function startBufferSource(buffer, offset = 0) {
             const context = props.audioContext;
@@ -1016,34 +1097,6 @@ requestId !== playbackRequestId
             error.value = '';
             normalizePoints();
             const requestId = ++playbackRequestId;
-            if (direction.value === 'forward') {
-                try {
-                    const audio = props.audioElement;
-                    audio.currentTime = start.value;
-                    loopEnabled.value = true;
-                    emit('loop-change', true);
-                    applyAudioRate();
-                    await props.audioContext?.resume();
-                    await audio.play();
-                    if (
-                        requestId !== playbackRequestId ||
-                        !loopEnabled.value
-                    ) {
-                        return;
-                    }
-                    setPlaying(true);
-                    monitorForward();
-                } catch (err) {
-                    stopLoop();
-                    error.value =
-                        'Unable to start loop playback.';
-                    console.warn(
-                        'Looper playback:',
-                        err
-                    );
-                }
-                return;
-            }
             const controller = new AbortController();
             playbackController = controller;
             preparing.value = true;
@@ -1080,12 +1133,8 @@ requestId !== playbackRequestId
                 return;
             }
             stopMonitoring();
-            if (direction.value === 'forward') {
-            props.audioElement?.pause();
-            } else {
-                playbackOffset = currentBufferOffset();
-                stopSource();
-            }
+            playbackOffset = currentBufferOffset();
+            stopSource();
             setPlaying(false);
         }
         async function resumeLoop() {
@@ -1093,26 +1142,6 @@ requestId !== playbackRequestId
                 !loopEnabled.value ||
                 loopPlaying.value
             ) {
-                return;
-            }
-            if (direction.value === 'forward') {
-                try {
-                    await props.audioContext?.resume();
-                    applyAudioRate();
-                    await props.audioElement.play();
-                    if (!loopEnabled.value) {
-                        return;
-                    }
-                    setPlaying(true);
-                    monitorForward();
-                } catch (err) {
-                    error.value =
-                        'Unable to resume playback.';
-                    console.warn(
-                        'Looper resume:',
-                        err
-                    );
-                }
                 return;
             }
             if (
@@ -1155,14 +1184,6 @@ requestId !== playbackRequestId
                 start.value,
                 Math.min(end.value, time)
             );
-            if (direction.value === 'forward') {
-                const audio = props.audioElement;
-                if (!audio) {
-                    return false;
-                }
-                audio.currentTime = target;
-                return true;
-            }
             const length = playbackEnd - playbackStart;
             if (length <= 0) {
                 return false;
@@ -1191,13 +1212,6 @@ requestId !== playbackRequestId
             return true;
         }
         function updateLoopRate() {
-            if (
-                loopEnabled.value &&
-                direction.value === 'forward'
-            ) {
-                applyAudioRate();
-                return;
-            }
             if (
                 !sourceNode ||
                 !props.audioContext
@@ -1525,17 +1539,22 @@ value.charCodeAt(index)
             if (!loopEnabled.value || preparing.value) {
                 return;
             }
-            if (direction.value === 'forward') {
-                enforceForward();
-            } else {
-                stopLoop();
-                void startLoop();
-            }
+            stopLoop();
+            void startLoop();
         });
         watch(
             effectiveRate,
             updateLoopRate
         );
+        watch([attackMs, releaseMs], () => {
+            if (loopEnabled.value && !preparing.value) {
+                const wasPlaying = loopPlaying.value;
+                stopLoop();
+                if (wasPlaying) {
+                    void startLoop();
+                }
+            }
+        });
         onMounted(() => {
             window.addEventListener(
                 'keydown',
@@ -1571,6 +1590,16 @@ value.charCodeAt(index)
             directionDescription,
             pitchSemitones,
             pitchStep,
+            attackMs,
+            releaseMs,
+            envelopeRef,
+            envelopeAttackX,
+            envelopeReleaseX,
+            envelopeLinePath,
+            envelopeFillPath,
+            onEnvelopePointerDown,
+            onEnvelopePointerMove,
+            onEnvelopePointerUp,
             formattedPitch,
             effectiveRate,
             effectiveBpm,
@@ -2073,4 +2102,49 @@ value.charCodeAt(index)
         font-size: 21px;
     }
 }
+
+.envelope-section {
+    border-top: 1px solid #333;
+    margin-top: 22px;
+    padding-top: 16px;
+}
+.envelope-header, .envelope-values {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.envelope-header {
+    color: #999;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    margin-bottom: 14px;
+}
+.envelope-header span:last-child { color: #fff; }
+.envelope-graph {
+    width: 100%;
+    height: 140px;
+    background: #0b0b0b;
+    border: 1px solid #333;
+    box-sizing: border-box;
+    touch-action: none;
+    cursor: ew-resize;
+}
+.envelope-graph.disabled { opacity: 0.4; cursor: default; }
+.envelope-graph svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.envelope-grid-line {
+    fill: none;
+    stroke: #333;
+    stroke-width: 0.7;
+    stroke-dasharray: 3 4;
+}
+.envelope-fill { fill: #fff; fill-opacity: 0.1; }
+.envelope-line { fill: none; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.envelope-handle { fill: #fff; stroke: #111; stroke-width: 2; }
+.envelope-values { margin-top: 12px; }
+.envelope-values > div { display: flex; flex-direction: column; gap: 5px; }
+.envelope-values > div:last-child { text-align: right; }
+.envelope-values span { font-size: 10px; color: #888; }
+.envelope-values strong { font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.envelope-description { margin: 12px 0 0; color: #777; font-size: 10px; line-height: 1.5; }
 </style>
