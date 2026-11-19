@@ -8,6 +8,41 @@
         <p class="description">
             Select a section to repeat or download as WAV.
         </p>
+        <div class="actions">
+            <button
+                type="button"
+                :disabled="!hasTrack"
+                :class="{ active: loopEnabled }"
+                @click="toggleLoop"
+            >
+                {{
+                    preparing
+                        ? 'CANCEL'
+                        : loopEnabled
+                            ? 'STOP LOOP'
+                            : 'START LOOP'
+                }}
+            </button>
+        </div>
+        <div class="waveform-zoom">
+            <span>WAVEFORM ZOOM</span>
+            <div class="waveform-zoom-buttons">
+                <button type="button" :disabled="!hasTrack || zoomLevel <= 1" @click="zoomOut" aria-label="Zoom out">−</button>
+                <strong>{{ zoomLevel.toFixed(1) }}×</strong>
+                <button type="button" :disabled="!hasTrack || zoomLevel >= 64" @click="zoomIn" aria-label="Zoom in">+</button>
+                <button type="button" :disabled="!hasTrack || zoomLevel === 1" @click="resetZoom">FIT</button>
+            </div>
+        </div>
+        <input
+            v-if="zoomLevel > 1"
+            v-model.number="viewStart"
+            class="waveform-pan"
+            type="range"
+            :min="0"
+            :max="Math.max(0, duration - visibleDuration)"
+            :step="Math.max(0.001, visibleDuration / 500)"
+            aria-label="Pan zoomed waveform"
+        />
         <div
             ref="waveformRef"
             class="waveform"
@@ -18,10 +53,10 @@
             @pointercancel="onPointerUp"
         >
             <div
-                v-for="(height, index) in waveform"
+                v-for="(height, index) in visibleWaveform"
                 :key="index"
                 class="waveform-bar"
-                :class="{ selected: isSelected(index) }"
+                :class="{ selected: isVisibleSelected(index) }"
                 :style="{ height: `${height}%` }"
             ></div>
             <div
@@ -34,8 +69,8 @@
             ></div>
         </div>
         <div class="time-labels">
-            <span>0:00</span>
-            <span>{{ formatTime(duration) }}</span>
+            <span>{{ formatPreciseTime(viewStart) }}</span>
+            <span>{{ formatPreciseTime(viewStart + visibleDuration) }}</span>
         </div>
         <div class="point-controls">
             <label>
@@ -228,29 +263,6 @@
             WAV EXPORT · {{ Math.round(effectiveRate * 100) }}% SPEED ·
             {{ effectiveBpm ? `${effectiveBpm} BPM` : 'BPM UNAVAILABLE' }}
         </p>
-        <div class="actions">
-            <button
-                type="button"
-                :disabled="!hasTrack"
-                :class="{ active: loopEnabled }"
-                @click="toggleLoop"
-            >
-                {{
-                    preparing
-                        ? 'CANCEL'
-                        : loopEnabled
-                            ? 'STOP LOOP'
-                            : 'START LOOP'
-                }}
-            </button>
-            <button
-                type="button"
-                :disabled="!hasTrack || exporting"
-                @click="exportLoop"
-            >
-                {{ exporting ? 'EXPORTING…' : 'DOWNLOAD WAV' }}
-            </button>
-        </div>
         <button
             type="button"
             class="reset-button"
@@ -259,6 +271,15 @@
         >
             Reset selection
         </button>
+        <div class="actions download-actions">
+            <button
+                type="button"
+                :disabled="!hasTrack || exporting"
+                @click="exportLoop"
+            >
+                {{ exporting ? 'EXPORTING…' : 'DOWNLOAD WAV' }}
+            </button>
+        </div>
         <p v-if="error" class="error" role="status">
             {{ error }}
         </p>
@@ -334,6 +355,34 @@ export default {
         const exporting = ref(false);
         const error = ref('');
         const waveformRef = ref(null);
+        const zoomLevel = ref(1);
+        const viewStart = ref(0);
+        const visibleDuration = computed(() => props.duration > 0 ? props.duration / zoomLevel.value : 0);
+        const visibleWaveform = computed(() => {
+            const bars = waveform.value;
+            const count = bars.length;
+            return Array.from({ length: count }, (_, index) => {
+                const time = viewStart.value + (index + 0.5) / count * visibleDuration.value;
+                const originalIndex = Math.min(count - 1, Math.max(0, Math.floor(time / Math.max(props.duration, 0.001) * count)));
+                return bars[originalIndex];
+            });
+        });
+        function clampViewStart(value) {
+            return Math.max(0, Math.min(Math.max(0, props.duration - visibleDuration.value), value));
+        }
+        function setZoom(next) {
+            const center = viewStart.value + visibleDuration.value / 2;
+            zoomLevel.value = Math.max(1, Math.min(64, next));
+            viewStart.value = clampViewStart(center - visibleDuration.value / 2);
+        }
+        function zoomIn() { setZoom(zoomLevel.value * 2); }
+        function zoomOut() { setZoom(zoomLevel.value / 2); }
+        function resetZoom() { zoomLevel.value = 1; viewStart.value = 0; }
+        function isVisibleSelected(index) {
+            const time = viewStart.value + (index + 0.5) / visibleWaveform.value.length * visibleDuration.value;
+            return time >= start.value && time <= end.value;
+        }
+
         const processedTime = ref(null);
         const directions = [
             {
@@ -502,31 +551,15 @@ export default {
             }
         });
         const selectionStyle = computed(() => {
-            if (!props.duration) {
-                return {
-                    left: '0%',
-                    width: '0%',
-                };
-            }
-            return {
-                left: `${start.value / props.duration * 100}%`,
-                width: `${loopLength.value / props.duration * 100}%`,
-            };
+            if (!visibleDuration.value) return { left: '0%', width: '0%' };
+            const left = Math.max(0, (start.value - viewStart.value) / visibleDuration.value * 100);
+            const right = Math.min(100, (end.value - viewStart.value) / visibleDuration.value * 100);
+            return { left: `${Math.min(100, left)}%`, width: `${Math.max(0, right - left)}%` };
         });
         const playheadPercent = computed(() => {
-            if (!props.duration) {
-                return 0;
-            }
-            const time = processedTime.value === null
-                ? props.currentTime
-                : processedTime.value;
-            return Math.max(
-                0,
-                Math.min(
-                    100,
-                    time / props.duration * 100
-                )
-            );
+            if (!visibleDuration.value) return -100;
+            const time = processedTime.value === null ? props.currentTime : processedTime.value;
+            return (time - viewStart.value) / visibleDuration.value * 100;
         });
         function formatTime(value) {
             if (!Number.isFinite(value)) {
@@ -565,16 +598,6 @@ Number(end.value) || maximum,
                 )
             );
         }
-        function isSelected(index) {
-            if (!props.duration) {
-                return false;
-            }
-            const position = index / waveform.value.length;
-            return (
-                position >= start.value / props.duration &&
-                position <= end.value / props.duration
-            );
-        }
         function getPointerPosition(event) {
             const bounds =
                 waveformRef.value.getBoundingClientRect();
@@ -585,7 +608,7 @@ Number(end.value) || maximum,
                     (event.clientX - bounds.left) / bounds.width
                 )
             );
-            return ratio * props.duration;
+            return viewStart.value + ratio * visibleDuration.value;
         }
         function updatePointer(event) {
             if (!hasTrack.value || !activeHandle) {
@@ -1517,6 +1540,7 @@ value.charCodeAt(index)
                 decodedCache = null;
                 decodedCacheUrl = '';
                 resetLoop();
+                resetZoom();
                 resetPitch();
             },
             { flush: 'sync' }
@@ -1532,6 +1556,7 @@ value.charCodeAt(index)
                 } else {
                     normalizePoints();
                 }
+                viewStart.value = clampViewStart(viewStart.value);
             },
             { immediate: true }
         );
@@ -1611,6 +1636,14 @@ value.charCodeAt(index)
             error,
             waveform,
             waveformRef,
+            zoomLevel,
+            viewStart,
+            visibleDuration,
+            visibleWaveform,
+            isVisibleSelected,
+            zoomIn,
+            zoomOut,
+            resetZoom,
             hasTrack,
             loopLength,
             selectionStyle,
@@ -1618,7 +1651,6 @@ value.charCodeAt(index)
             formatTime,
             formatPreciseTime,
             normalizePoints,
-            isSelected,
             onPointerDown,
             onPointerMove,
             onPointerUp,
@@ -2026,7 +2058,7 @@ value.charCodeAt(index)
 }
 .actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 8px;
     margin-top: 20px;
 }
@@ -2147,4 +2179,28 @@ value.charCodeAt(index)
 .envelope-values span { font-size: 10px; color: #888; }
 .envelope-values strong { font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .envelope-description { margin: 12px 0 0; color: #777; font-size: 10px; line-height: 1.5; }
+.waveform-zoom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0 8px;
+    color: #999;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+}
+.waveform-zoom-buttons { display: flex; align-items: center; gap: 5px; }
+.waveform-zoom-buttons button {
+    min-width: 30px;
+    min-height: 28px;
+    background: #000;
+    border: 1px solid #555;
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
+}
+.waveform-zoom-buttons button:hover:not(:disabled) { background: #fff; color: #000; }
+.waveform-zoom-buttons button:disabled { opacity: 0.35; cursor: default; }
+.waveform-zoom-buttons strong { min-width: 42px; text-align: center; color: #fff; font-weight: 400; }
+.waveform-pan { width: 100%; margin: 0 0 10px; accent-color: #fff; }
 </style>
