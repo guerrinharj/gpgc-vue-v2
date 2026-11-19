@@ -27,8 +27,8 @@ function encodeWav(buffer) {
     const frames = buffer.length;
     const data = new ArrayBuffer(44 + frames * channels * 2);
     const view = new DataView(data);
-    const write = (offset, text) => {
-        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    const write = (offset, value) => {
+        for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
     };
     write(0, 'RIFF');
     view.setUint32(4, data.byteLength - 8, true);
@@ -101,7 +101,7 @@ export default {
                     if (event.data && event.data.size) chunks.push(event.data);
                 };
                 mediaRecorder.onerror = () => {
-                    error.value = 'Audio recording failed.';
+                    if (!disposed) error.value = 'Audio recording failed.';
                     recording.value = false;
                     clearClock();
                 };
@@ -111,8 +111,7 @@ export default {
                     processing.value = true;
                     try {
                         const encoded = new Blob(chunks, { type });
-                        const bytes = await encoded.arrayBuffer();
-                        const decoded = await context.decodeAudioData(bytes);
+                        const decoded = await context.decodeAudioData(await encoded.arrayBuffer());
                         const wav = encodeWav(decoded);
                         if (!disposed) {
                             clearRecording();
@@ -126,7 +125,7 @@ export default {
                         recorder = null;
                     }
                 };
-                if (previewRef.value) previewRef.value.pause();
+                previewRef.value?.pause();
                 clearRecording();
                 elapsed.value = 0;
                 mediaRecorder.start(250);

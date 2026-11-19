@@ -1,5 +1,5 @@
 <template>
-    <aside class="audio-player" aria-label="Audio player">
+    <aside class="audio-player" :class="{ expanded: showAudioTools }" aria-label="Audio player">
         <audio
             ref="audioRef"
             crossorigin="anonymous"
@@ -27,31 +27,31 @@
             </div>
             <div class="transport">
                 <button
-            type="button"
-            aria-label="Previous track"
+                    type="button"
+                    aria-label="Previous track"
                     :disabled="!currentTrack"
                     @click="previous"
                 >←</button>
                 <button
-            type="button"
+                    type="button"
                     :aria-label="playing ? 'Pause' : 'Play'"
                     :disabled="!currentTrack"
                     @click="toggle"
                 >{{ playing ? 'Ⅱ' : '▶' }}</button>
                 <button
-            type="button"
-            aria-label="Next track"
+                    type="button"
+                    aria-label="Next track"
                     :disabled="!currentTrack"
                     @click="next"
                 >→</button>
                 <button
-            type="button"
-            class="shuffle-button"
+                    type="button"
+                    class="shuffle-button"
                     :class="{ active: radioMode }"
                     :aria-pressed="radioMode"
                     :disabled="shuffleLoading"
                     :title="radioMode ? 'Restart shuffle' : 'Shuffle tracks from 2018 onward'"
-            aria-label="Shuffle tracks from 2018 onward"
+                    aria-label="Shuffle tracks from 2018 onward"
                     @click="startShuffle"
                 >⤨</button>
             </div>
@@ -73,23 +73,23 @@
         <div class="seek-line">
             <span>{{ formatTime(currentTime) }}</span>
             <input
-            type="range"
-            min="0"
-            max="1000"
+                type="range"
+                min="0"
+                max="1000"
                 :value="progress"
                 :disabled="!duration"
                 :style="rangeStyle(progress, 0, 1000)"
-            aria-label="Track position"
+                aria-label="Track position"
                 @input="seek"
             />
             <span>{{ formatTime(duration) }}</span>
         </div>
         <div class="tools-bar">
             <button
-            type="button"
-            class="tools-toggle"
+                type="button"
+                class="tools-toggle"
                 :aria-expanded="showAudioTools"
-            aria-controls="audio-tools-panel"
+                aria-controls="audio-tools-panel"
                 @click="toggleAudioTools"
             >
                 <span class="tools-icon">☷</span>
@@ -101,42 +101,46 @@
             <label for="player-volume" class="volume-label">
                 <span>Volume</span>
                 <input
-            id="player-volume"
+                    id="player-volume"
             v-model.number="volume"
-            type="range"
-            min="0"
-            max="100"
+                    type="range"
+                    min="0"
+                    max="100"
                     :style="rangeStyle(volume, 0, 100)"
                     @input="updateVolume"
                 />
             </label>
         </div>
         <div
-v-show="showAudioTools"
+            v-show="showAudioTools"
             id="audio-tools-panel"
             class="audio-tools-panel"
         >
+            <div class="tools-panel-heading">
+                <span>AUDIO TOOLS</span>
+                <button type="button" @click="toggleAudioTools">CLOSE AUDIO TOOLS ×</button>
+            </div>
             <div
-            class="tool-tabs"
-            role="group"
-            aria-label="Audio tools"
+                class="tool-tabs"
+                role="group"
+                aria-label="Audio tools"
             >
                 <button
-            type="button"
-            class="tool-tab"
+                    type="button"
+                    class="tool-tab"
                     :class="{ active: activeTool === 'sound' }"
                     :aria-pressed="activeTool === 'sound'"
-            aria-controls="player-effects"
+                    aria-controls="player-effects"
                     @click="toggleTool('sound')"
                 >
                     <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
                     >
                         <line x1="4" y1="7" x2="20" y2="7" />
                         <line x1="4" y1="17" x2="20" y2="17" />
@@ -146,20 +150,20 @@ v-show="showAudioTools"
                     <span>Sound</span>
                 </button>
                 <button
-            type="button"
-            class="tool-tab"
+                    type="button"
+                    class="tool-tab"
                     :class="{ active: activeTool === 'stems' }"
                     :aria-pressed="activeTool === 'stems'"
-            aria-controls="player-stems"
+                    aria-controls="player-stems"
                     @click="toggleTool('stems')"
                 >
                     <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        aria-hidden="true"
                     >
                         <line x1="4" y1="10" x2="4" y2="14" />
                         <line x1="8" y1="5" x2="8" y2="19" />
@@ -170,21 +174,21 @@ v-show="showAudioTools"
                     <span>Stems</span>
                 </button>
                 <button
-            type="button"
-            class="tool-tab"
+                    type="button"
+                    class="tool-tab"
                     :class="{ active: activeTool === 'looper' }"
                     :aria-pressed="activeTool === 'looper'"
-            aria-controls="player-looper"
+                    aria-controls="player-looper"
                     @click="toggleTool('looper')"
                 >
                     <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
                     >
                         <path d="M17 2l4 4-4 4" />
                         <path d="M3 11V9a3 3 0 0 1 3-3h15" />
@@ -194,11 +198,11 @@ v-show="showAudioTools"
                     <span>Looper</span>
                 </button>
                 <button
-            type="button"
-            class="tool-tab"
+                    type="button"
+                    class="tool-tab"
                     :class="{ active: activeTool === 'recorder' }"
                     :aria-pressed="activeTool === 'recorder'"
-            aria-controls="player-recorder"
+                    aria-controls="player-recorder"
                     @click="toggleTool('recorder')"
                 >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
@@ -209,15 +213,15 @@ v-show="showAudioTools"
                 </button>
             </div>
             <div
-v-show="activeTool === 'sound'"
-            id="player-effects"
-            class="tool-content"
+                v-show="activeTool === 'sound'"
+                id="player-effects"
+                class="tool-content"
             >
                 <div class="tool-heading">
                     <strong>Sound Settings</strong>
                     <button
-            type="button"
-            class="heading-action"
+                        type="button"
+                        class="heading-action"
                         @click="resetEffects"
                     >
                         Reset
@@ -231,9 +235,9 @@ v-show="activeTool === 'sound'"
                         </span>
                         <input
             v-model.number="bass"
-            type="range"
-            min="-12"
-            max="12"
+                            type="range"
+                            min="-12"
+                            max="12"
                             :style="rangeStyle(bass, -12, 12)"
                             @input="updateEffects"
                         />
@@ -245,9 +249,9 @@ v-show="activeTool === 'sound'"
                         </span>
                         <input
             v-model.number="treble"
-            type="range"
-            min="-12"
-            max="12"
+                            type="range"
+                            min="-12"
+                            max="12"
                             :style="rangeStyle(treble, -12, 12)"
                             @input="updateEffects"
                         />
@@ -267,65 +271,13 @@ v-show="activeTool === 'sound'"
                         </span>
                         <input
             v-model.number="pan"
-            type="range"
-            min="-100"
-            max="100"
+                            type="range"
+                            min="-100"
+                            max="100"
                             :style="rangeStyle(pan, -100, 100)"
                             @input="updateEffects"
                         />
                     </label>
-                    <div class="echo-controls">
-                        <div class="echo-header">
-                            <strong>Echo</strong>
-                            <span>DELAY</span>
-                        </div>
-                        <label>
-                            <span class="control-heading">
-                                <span>Dry / Wet</span>
-                                <output>{{ echo }}%</output>
-                            </span>
-                            <input
-                                v-model.number="echo"
-                                type="range"
-                                min="0"
-                                max="70"
-                                :style="rangeStyle(echo, 0, 70)"
-                                aria-label="Echo dry wet"
-                                @input="updateEffects"
-                            />
-                        </label>
-                        <label>
-                            <span class="control-heading">
-                                <span>Time</span>
-                                <output>{{ echoTime }} ms</output>
-                            </span>
-                            <input
-                                v-model.number="echoTime"
-                                type="range"
-                                min="50"
-                                max="1500"
-                                step="10"
-                                :style="rangeStyle(echoTime, 50, 1500)"
-                                aria-label="Echo delay time"
-                                @input="updateEffects"
-                            />
-                        </label>
-                        <label>
-                            <span class="control-heading">
-                                <span>Feedback</span>
-                                <output>{{ echoFeedback }}%</output>
-                            </span>
-                            <input
-                                v-model.number="echoFeedback"
-                                type="range"
-                                min="0"
-                                max="85"
-                                :style="rangeStyle(echoFeedback, 0, 85)"
-                                aria-label="Echo feedback"
-                                @input="updateEffects"
-                            />
-                        </label>
-                    </div>
                 </div>
                 <div class="vinyl-section">
                     <div class="vinyl-header">
@@ -336,7 +288,7 @@ v-show="activeTool === 'sound'"
                     </div>
                     <div class="mode-switch">
                         <button
-            type="button"
+                            type="button"
                             :class="{ active: !vinylMode }"
                             :aria-pressed="!vinylMode"
                             @click="setVinylMode(false)"
@@ -344,7 +296,7 @@ v-show="activeTool === 'sound'"
                             Independent
                         </button>
                         <button
-            type="button"
+                            type="button"
                             :class="{ active: vinylMode }"
                             :aria-pressed="vinylMode"
                             @click="setVinylMode(true)"
@@ -359,11 +311,11 @@ v-show="activeTool === 'sound'"
                         </span>
                         <input
             v-model.number="speed"
-            type="range"
-            min="50"
-            max="150"
-            step="1"
-            aria-label="Playback speed"
+                            type="range"
+                            min="50"
+                            max="150"
+                            step="1"
+                            aria-label="Playback speed"
                             :style="rangeStyle(speed, 50, 150)"
                             @input="updateEffects"
                         />
@@ -393,9 +345,9 @@ v-show="activeTool === 'sound'"
                 </div>
             </div>
             <div
-v-show="activeTool === 'stems'"
-            id="player-stems"
-            class="tool-content"
+                v-show="activeTool === 'stems'"
+                id="player-stems"
+                class="tool-content"
             >
                 <div class="tool-heading">
                     <strong>Stem Separation</strong>
@@ -416,12 +368,12 @@ v-show="activeTool === 'stems'"
                 </p>
             </div>
             <div
-v-show="activeTool === 'looper'"
-            id="player-looper"
-            class="tool-content looper-content"
+                v-show="activeTool === 'looper'"
+                id="player-looper"
+                class="tool-content looper-content"
             >
                 <TheLooper
-            ref="looperRef"
+                    ref="looperRef"
                     :audio-element="audioRef"
                     :source-url="currentTrack?.url || ''"
                     :track-name="currentTrack?.name || 'track'"
@@ -431,15 +383,24 @@ v-show="activeTool === 'looper'"
                     :connect-loop-source="connectLoopSource"
                     :playback-rate="playbackRate"
                     :original-bpm="originalBpm"
+                    :dual-filters="dualFilters"
+                    :echo="echo"
+                    :echo-time="echoTime"
+                    :echo-feedback="echoFeedback"
+                    :effect-settings="effectSettings"
+                    @update:dual-filters="setDualFilters"
+                    @update:echo="setEcho"
+                    @update:echo-time="setEchoTime"
+                    @update:echo-feedback="setEchoFeedback"
                     @loop-change="onLoopChange"
                     @loop-playing="onLoopPlaying"
                     @loop-time="onLoopTime"
                 />
             </div>
             <div
-v-show="activeTool === 'recorder'"
-            id="player-recorder"
-            class="tool-content recorder-content"
+                v-show="activeTool === 'recorder'"
+                id="player-recorder"
+                class="tool-content recorder-content"
             >
                 <ThePerformanceRecorder
                     :audio-context="audioContext"
@@ -505,6 +466,36 @@ v-show="activeTool === 'recorder'"
         const echo = ref(0);
         const echoTime = ref(280);
         const echoFeedback = ref(25);
+        const dualFilters = ref([
+            { enabled: false, type: 'lowpass', frequency: 750, q: 0.7 },
+            { enabled: false, type: 'highpass', frequency: 250, q: 0.7 },
+        ]);
+        const effectSettings = computed(() => ({
+            bass: bass.value,
+            treble: treble.value,
+            pan: pan.value,
+            volume: volume.value / 100,
+            filters: dualFilters.value.map(filter => ({ ...filter })),
+            echo: echo.value,
+            echoTime: echoTime.value,
+            echoFeedback: echoFeedback.value,
+        }));
+        function setDualFilters(value) {
+            dualFilters.value = value.map(filter => ({ ...filter }));
+            updateEffects();
+        }
+        function setEcho(value) {
+            echo.value = value;
+            updateEffects();
+        }
+        function setEchoTime(value) {
+            echoTime.value = value;
+            updateEffects();
+        }
+        function setEchoFeedback(value) {
+            echoFeedback.value = value;
+            updateEffects();
+        }
         const speed = ref(100);
         const vinylMode = ref(true);
         const originalBpm = ref(null);
@@ -517,9 +508,7 @@ v-show="activeTool === 'recorder'"
         let trackRequestId = 0;
         function toggleAudioTools() {
             showAudioTools.value = !showAudioTools.value;
-            if (!showAudioTools.value) {
-                activeTool.value = null;
-            }
+
         }
         function toggleTool(tool) {
             activeTool.value = activeTool.value === tool
@@ -606,6 +595,15 @@ v-show="activeTool === 'recorder'"
                 '--range-progress': `${percent}%`,
             };
         }
+        function filterHz(value) {
+            const min = Math.log(20);
+            const max = Math.log(20000);
+            return Math.exp(min + (value / 1000) * (max - min));
+        }
+        function formatFrequency(value) {
+            const hz = filterHz(value);
+            return hz >= 1000 ? `${(hz / 1000).toFixed(2)} kHz` : `${Math.round(hz)} Hz`;
+        }
         function formatTime(value) {
             if (!Number.isFinite(value)) {
                 return '0:00';
@@ -647,7 +645,7 @@ v-show="activeTool === 'recorder'"
         function onMetadata() {
             const value = audioRef.value?.duration;
             duration.value =
-                Number.isFinite(value) && value > 0
+Number.isFinite(value) && value > 0
                     ? value
                     : 0;
         }
@@ -750,7 +748,7 @@ v-show="activeTool === 'recorder'"
         }
         function updateVolume() {
             if (audioRef.value) {
-                audioRef.value.volume = volume.value / 100;
+                audioRef.value.volume = graph ? 1 : volume.value / 100;
             }
             if (graph) {
                 graph.masterGain.gain.value = volume.value / 100;
@@ -802,6 +800,8 @@ v-show="activeTool === 'recorder'"
                 const trebleFilter = context.createBiquadFilter();
                 trebleFilter.type = 'highshelf';
                 trebleFilter.frequency.value = 3400;
+                const filterOne = context.createBiquadFilter();
+                const filterTwo = context.createBiquadFilter();
                 const stereoPan = context.createStereoPanner();
                 const delay = context.createDelay(1.5);
                 delay.delayTime.value = echoTime.value / 1000;
@@ -815,9 +815,11 @@ v-show="activeTool === 'recorder'"
                 const input = context.createGain();
                 input.connect(bassFilter);
                 bassFilter.connect(trebleFilter);
-                trebleFilter.connect(stereoPan);
+                trebleFilter.connect(filterOne);
+                filterOne.connect(filterTwo);
+                filterTwo.connect(stereoPan);
                 stereoPan.connect(masterGain);
-                trebleFilter.connect(delay);
+                filterTwo.connect(delay);
                 delay.connect(feedback);
                 feedback.connect(delay);
                 delay.connect(wet);
@@ -832,6 +834,8 @@ v-show="activeTool === 'recorder'"
                     mediaSource,
                     bassFilter,
                     trebleFilter,
+                    filterOne,
+                    filterTwo,
                     stereoPan,
                     wet,
                     delay,
@@ -857,7 +861,7 @@ v-show="activeTool === 'recorder'"
             if (!currentGraph) {
                 throw new Error('Audio graph unavailable.');
             }
-            source.connect(currentGraph.input);
+source.connect(currentGraph.input);
         }
         function updateEffects() {
             applyPlaybackRate();
@@ -866,6 +870,17 @@ v-show="activeTool === 'recorder'"
                 graph.bassFilter.gain.value = bass.value;
                 graph.trebleFilter.gain.value = treble.value;
                 graph.stereoPan.pan.value = pan.value / 100;
+                [graph.filterOne, graph.filterTwo].forEach((node, index) => {
+                    const settings = dualFilters.value[index];
+                    const now = node.context.currentTime;
+                    node.type = settings.enabled ? settings.type : 'allpass';
+                    node.frequency.setTargetAtTime(
+                        Math.min(filterHz(settings.frequency), node.context.sampleRate * 0.49),
+                        now,
+                        0.015
+                    );
+                    node.Q.setTargetAtTime(settings.q, now, 0.015);
+                });
                 graph.wet.gain.setTargetAtTime(
                     echo.value / 100,
                     graph.wet.context.currentTime,
@@ -890,6 +905,10 @@ v-show="activeTool === 'recorder'"
             echo.value = 0;
             echoTime.value = 280;
             echoFeedback.value = 25;
+            dualFilters.value = [
+                { enabled: false, type: 'lowpass', frequency: 750, q: 0.7 },
+                { enabled: false, type: 'highpass', frequency: 250, q: 0.7 },
+            ];
             speed.value = 100;
             vinylMode.value = true;
             updateEffects();
@@ -971,6 +990,12 @@ v-show="activeTool === 'recorder'"
             echo,
             echoTime,
             echoFeedback,
+            dualFilters,
+            effectSettings,
+            setDualFilters,
+            setEcho,
+            setEchoTime,
+            setEchoFeedback,
             speed,
             vinylMode,
             playbackRate,
@@ -979,6 +1004,7 @@ v-show="activeTool === 'recorder'"
             pitchLabel,
             bpmLabel,
             rangeStyle,
+            formatFrequency,
             formatTime,
             onMetadata,
             onTime,
@@ -1005,7 +1031,10 @@ v-show="activeTool === 'recorder'"
     left: 4vh;
     bottom: 4vh;
     width: min(350px, calc(100vw - 8vh));
-    max-height: min(75dvh, 650px);
+    box-sizing: border-box;
+    transition: width 180ms ease;
+    overflow-x: hidden;
+    max-height: 90dvh;
     overflow-y: auto;
     background: #000;
     color: #fff;
@@ -1014,6 +1043,9 @@ v-show="activeTool === 'recorder'"
     padding: 20px;
     scrollbar-width: thin;
     scrollbar-color: #555 #000;
+}
+.audio-player.expanded {
+    width: min(50vw, 960px);
 }
 .player-line {
     display: flex;
@@ -1125,6 +1157,18 @@ v-show="activeTool === 'recorder'"
     border-top: 1px solid #444;
     margin-top: 17px;
     padding-top: 14px;
+}
+.tools-panel-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    font-size: 11px;
+}
+.tools-panel-heading button {
+    color: #aaa;
+    font-size: 11px;
+    cursor: pointer;
 }
 .tool-tabs {
     display: grid;
@@ -1365,7 +1409,7 @@ background 180ms ease,
 }
     input[type='range'] {
     appearance: none;
-    -webkit-appearance: none;
+-webkit-appearance: none;
     width: 100%;
     height: 2px;
     padding: 0;
@@ -1382,14 +1426,14 @@ background 180ms ease,
 }
     input[type='range']::-webkit-slider-runnable-track {
     appearance: none;
-    -webkit-appearance: none;
+-webkit-appearance: none;
     height: 2px;
     background: transparent;
     border: 0;
 }
     input[type='range']::-webkit-slider-thumb {
     appearance: none;
-    -webkit-appearance: none;
+-webkit-appearance: none;
     width: 10px;
     height: 10px;
     margin-top: -4px;
@@ -1422,7 +1466,7 @@ background 180ms ease,
     outline: 1px solid #fff;
     outline-offset: 4px;
 }
-@media (max-width: 768px) {
+            @media (max-width: 768px) {
 .audio-player {
         left: 20px;
         bottom: 20px;
@@ -1461,7 +1505,7 @@ background 180ms ease,
         font-size: 17px;
     }
 }
-@media (max-width: 420px) {
+            @media (max-width: 420px) {
 .audio-player {
         left: 12px;
         bottom: 14px;
@@ -1510,7 +1554,7 @@ background 180ms ease,
         font-size: 15px;
     }
 }
-@media (prefers-reduced-motion: reduce) {
+            @media (prefers-reduced-motion: reduce) {
 .mode-switch button,
 .tool-tab {
         transition: none;
