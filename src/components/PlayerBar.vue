@@ -112,10 +112,14 @@
             </label>
         </div>
         <div
-            v-if="showAudioTools"
+            v-show="showAudioTools"
             id="audio-tools-panel"
             class="audio-tools-panel"
         >
+            <div class="tools-panel-heading">
+                <span>AUDIO TOOLS</span>
+                <button type="button" @click="toggleAudioTools">CLOSE AUDIO TOOLS ×</button>
+            </div>
             <div
                 class="tool-tabs"
                 role="group"
@@ -274,119 +278,6 @@
                             @input="updateEffects"
                         />
                     </label>
-                    <div class="echo-controls">
-                        <div class="echo-header">
-                            <strong>Echo</strong>
-                            <span>DELAY</span>
-                        </div>
-                        <label>
-                            <span class="control-heading">
-                                <span>Dry / Wet</span>
-                                <output>{{ echo }}%</output>
-                            </span>
-                            <input
-            v-model.number="echo"
-                                type="range"
-                                min="0"
-                                max="70"
-                                :style="rangeStyle(echo, 0, 70)"
-                                aria-label="Echo dry wet"
-                                @input="updateEffects"
-                            />
-                        </label>
-                        <label>
-                            <span class="control-heading">
-                                <span>Time</span>
-                                <output>{{ echoTime }} ms</output>
-                            </span>
-                            <input
-            v-model.number="echoTime"
-                                type="range"
-                                min="50"
-                                max="1500"
-                                step="10"
-                                :style="rangeStyle(echoTime, 50, 1500)"
-                                aria-label="Echo delay time"
-                                @input="updateEffects"
-                            />
-                        </label>
-                        <label>
-                            <span class="control-heading">
-                                <span>Feedback</span>
-                                <output>{{ echoFeedback }}%</output>
-                            </span>
-                            <input
-            v-model.number="echoFeedback"
-                                type="range"
-                                min="0"
-                                max="85"
-                                :style="rangeStyle(echoFeedback, 0, 85)"
-                                aria-label="Echo feedback"
-                                @input="updateEffects"
-                            />
-                        </label>
-                    </div>
-                </div>
-                <div class="dual-filter-section">
-                    <div class="dual-filter-heading">
-                        <strong>Dual Filter</strong>
-                        <span>FILTER 1 → FILTER 2</span>
-                    </div>
-                    <div class="dual-filter-grid">
-                        <div v-for="(filter, index) in dualFilters" :key="index" class="filter-module">
-                            <div class="filter-module-heading">
-                                <strong>Filter {{ index + 1 }}</strong>
-                                <button
-                                    type="button"
-                                    class="filter-power"
-                                    :class="{ active: filter.enabled }"
-                                    :aria-pressed="filter.enabled"
-                                    @click="filter.enabled = !filter.enabled; updateEffects()"
-                                >{{ filter.enabled ? 'ON' : 'OFF' }}</button>
-                            </div>
-                            <label class="filter-type-label">
-                                <span>Type</span>
-                                <select v-model="filter.type" @change="updateEffects">
-                                    <option value="highpass">High Pass</option>
-                                    <option value="lowpass">Low Pass</option>
-                                    <option value="bandpass">Bandpass</option>
-                                    <option value="notch">Notch Filter</option>
-                                </select>
-                            </label>
-                            <label class="filter-range-label">
-                                <span class="control-heading">
-                                    <span>Frequency</span>
-                                    <output>{{ formatFrequency(filter.frequency) }}</output>
-                                </span>
-                                <input
-                                    v-model.number="filter.frequency"
-                                    type="range"
-                                    min="0"
-                                    max="1000"
-                                    step="1"
-                                    :style="rangeStyle(filter.frequency, 0, 1000)"
-                                    :aria-label="`Filter ${index + 1} frequency`"
-                                    @input="updateEffects"
-                                />
-                            </label>
-                            <label class="filter-range-label">
-                                <span class="control-heading">
-                                    <span>Resonance (Q)</span>
-                                    <output>{{ filter.q.toFixed(1) }}</output>
-                                </span>
-                                <input
-                                    v-model.number="filter.q"
-                                    type="range"
-                                    min="0.1"
-                                    max="20"
-                                    step="0.1"
-                                    :style="rangeStyle(filter.q, 0.1, 20)"
-                                    :aria-label="`Filter ${index + 1} resonance`"
-                                    @input="updateEffects"
-                                />
-                            </label>
-                        </div>
-                    </div>
                 </div>
                 <div class="vinyl-section">
                     <div class="vinyl-header">
@@ -492,6 +383,15 @@
                     :connect-loop-source="connectLoopSource"
                     :playback-rate="playbackRate"
                     :original-bpm="originalBpm"
+                    :dual-filters="dualFilters"
+                    :echo="echo"
+                    :echo-time="echoTime"
+                    :echo-feedback="echoFeedback"
+                    :effect-settings="effectSettings"
+                    @update:dual-filters="setDualFilters"
+                    @update:echo="setEcho"
+                    @update:echo-time="setEchoTime"
+                    @update:echo-feedback="setEchoFeedback"
                     @loop-change="onLoopChange"
                     @loop-playing="onLoopPlaying"
                     @loop-time="onLoopTime"
@@ -570,6 +470,32 @@
             { enabled: false, type: 'lowpass', frequency: 750, q: 0.7 },
             { enabled: false, type: 'highpass', frequency: 250, q: 0.7 },
         ]);
+        const effectSettings = computed(() => ({
+            bass: bass.value,
+            treble: treble.value,
+            pan: pan.value,
+            volume: volume.value / 100,
+            filters: dualFilters.value.map(filter => ({ ...filter })),
+            echo: echo.value,
+            echoTime: echoTime.value,
+            echoFeedback: echoFeedback.value,
+        }));
+        function setDualFilters(value) {
+            dualFilters.value = value.map(filter => ({ ...filter }));
+            updateEffects();
+        }
+        function setEcho(value) {
+            echo.value = value;
+            updateEffects();
+        }
+        function setEchoTime(value) {
+            echoTime.value = value;
+            updateEffects();
+        }
+        function setEchoFeedback(value) {
+            echoFeedback.value = value;
+            updateEffects();
+        }
         const speed = ref(100);
         const vinylMode = ref(true);
         const originalBpm = ref(null);
@@ -582,9 +508,7 @@
         let trackRequestId = 0;
         function toggleAudioTools() {
             showAudioTools.value = !showAudioTools.value;
-            if (!showAudioTools.value) {
-                activeTool.value = null;
-            }
+
         }
         function toggleTool(tool) {
             activeTool.value = activeTool.value === tool
@@ -824,7 +748,7 @@ Number.isFinite(value) && value > 0
         }
         function updateVolume() {
             if (audioRef.value) {
-                audioRef.value.volume = volume.value / 100;
+                audioRef.value.volume = graph ? 1 : volume.value / 100;
             }
             if (graph) {
                 graph.masterGain.gain.value = volume.value / 100;
@@ -1067,8 +991,11 @@ source.connect(currentGraph.input);
             echoTime,
             echoFeedback,
             dualFilters,
-            filterHz,
-            formatFrequency,
+            effectSettings,
+            setDualFilters,
+            setEcho,
+            setEchoTime,
+            setEchoFeedback,
             speed,
             vinylMode,
             playbackRate,
@@ -1077,6 +1004,7 @@ source.connect(currentGraph.input);
             pitchLabel,
             bpmLabel,
             rangeStyle,
+            formatFrequency,
             formatTime,
             onMetadata,
             onTime,
@@ -1105,7 +1033,8 @@ source.connect(currentGraph.input);
     width: min(350px, calc(100vw - 8vh));
     box-sizing: border-box;
     transition: width 180ms ease;
-    max-height: min(75dvh, 650px);
+    overflow-x: hidden;
+    max-height: 90dvh;
     overflow-y: auto;
     background: #000;
     color: #fff;
@@ -1114,6 +1043,9 @@ source.connect(currentGraph.input);
     padding: 20px;
     scrollbar-width: thin;
     scrollbar-color: #555 #000;
+}
+.audio-player.expanded {
+    width: min(50vw, 960px);
 }
 .player-line {
     display: flex;
@@ -1225,6 +1157,18 @@ source.connect(currentGraph.input);
     border-top: 1px solid #444;
     margin-top: 17px;
     padding-top: 14px;
+}
+.tools-panel-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    font-size: 11px;
+}
+.tools-panel-heading button {
+    color: #aaa;
+    font-size: 11px;
+    cursor: pointer;
 }
 .tool-tabs {
     display: grid;

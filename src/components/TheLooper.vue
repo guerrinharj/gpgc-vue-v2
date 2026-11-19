@@ -24,6 +24,129 @@
                 }}
             </button>
         </div>
+        <div class="looper-effects">
+            <div class="looper-effects-heading"><strong>LOOP EFFECTS</strong><span>LIVE + WAV EXPORT</span></div>
+            <div class="filter-response">
+                <svg viewBox="0 0 600 150" preserveAspectRatio="none" role="img" aria-label="Combined filter frequency response">
+                    <line v-for="i in 5" :key="i" x1="0" :y1="i * 25" x2="600" :y2="i * 25" stroke="#333" stroke-width="1" />
+                    <path :d="filterResponsePath" fill="none" stroke="#fff" stroke-width="2" vector-effect="non-scaling-stroke" />
+                </svg>
+                <div class="filter-response-labels"><span>20 Hz</span><span>200 Hz</span><span>2 kHz</span><span>20 kHz</span></div>
+            </div>
+                <div class="dual-filter-section">
+                    <div class="dual-filter-heading">
+                        <strong>Dual Filter</strong>
+                        <span>FILTER 1 → FILTER 2</span>
+                    </div>
+                    <div class="dual-filter-grid">
+                        <div v-for="(filter, index) in dualFilters" :key="index" class="filter-module">
+                            <div class="filter-module-heading">
+                                <strong>Filter {{ index + 1 }}</strong>
+                                <button
+                                    type="button"
+                                    class="filter-power"
+                                    :class="{ active: filter.enabled }"
+                                    :aria-pressed="filter.enabled"
+                                    @click="changeFilter(index, { enabled: !filter.enabled })"
+                                >{{ filter.enabled ? 'ON' : 'OFF' }}</button>
+                            </div>
+                            <label class="filter-type-label">
+                                <span>Type</span>
+                                <select  :value="filter.type" @change="changeFilter(index, { type: $event.target.value })">
+                                    <option value="highpass">High Pass</option>
+                                    <option value="lowpass">Low Pass</option>
+                                    <option value="bandpass">Bandpass</option>
+                                    <option value="notch">Notch Filter</option>
+                                </select>
+                            </label>
+                            <label class="filter-range-label">
+                                <span class="control-heading">
+                                    <span>Frequency</span>
+                                    <output>{{ formatFrequency(filter.frequency) }}</output>
+                                </span>
+                                <input
+                                     :value="filter.frequency"
+                                    type="range"
+                                    min="0"
+                                    max="1000"
+                                    step="1"
+                                    :style="rangeStyle(filter.frequency, 0, 1000)"
+                                    :aria-label="`Filter ${index + 1} frequency`"
+                                    @input="changeFilter(index, { frequency: Number($event.target.value) })"
+                                />
+                            </label>
+                            <label class="filter-range-label">
+                                <span class="control-heading">
+                                    <span>Resonance (Q)</span>
+                                    <output>{{ filter.q.toFixed(1) }}</output>
+                                </span>
+                                <input
+                                     :value="filter.q"
+                                    type="range"
+                                    min="0.1"
+                                    max="20"
+                                    step="0.1"
+                                    :style="rangeStyle(filter.q, 0.1, 20)"
+                                    :aria-label="`Filter ${index + 1} resonance`"
+                                    @input="changeFilter(index, { q: Number($event.target.value) })"
+                                />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                    <div class="echo-controls">
+                        <div class="echo-header">
+                            <strong>Echo</strong>
+                            <span>DELAY</span>
+                        </div>
+                        <label>
+                            <span class="control-heading">
+                                <span>Dry / Wet</span>
+                                <output>{{ echo }}%</output>
+                            </span>
+                            <input
+             :value="echo"
+                                type="range"
+                                min="0"
+                                max="70"
+                                :style="rangeStyle(echo, 0, 70)"
+                                aria-label="Echo dry wet"
+                                @input="emit('update:echo', Number($event.target.value))"
+                            />
+                        </label>
+                        <label>
+                            <span class="control-heading">
+                                <span>Time</span>
+                                <output>{{ echoTime }} ms</output>
+                            </span>
+                            <input
+             :value="echoTime"
+                                type="range"
+                                min="50"
+                                max="1500"
+                                step="10"
+                                :style="rangeStyle(echoTime, 50, 1500)"
+                                aria-label="Echo delay time"
+                                @input="emit('update:echo-time', Number($event.target.value))"
+                            />
+                        </label>
+                        <label>
+                            <span class="control-heading">
+                                <span>Feedback</span>
+                                <output>{{ echoFeedback }}%</output>
+                            </span>
+                            <input
+             :value="echoFeedback"
+                                type="range"
+                                min="0"
+                                max="85"
+                                :style="rangeStyle(echoFeedback, 0, 85)"
+                                aria-label="Echo feedback"
+                                @input="emit('update:echo-feedback', Number($event.target.value))"
+                            />
+                        </label>
+                    </div>
+        </div>
         <div class="waveform-zoom">
             <span>WAVEFORM ZOOM</span>
             <div class="waveform-zoom-buttons">
@@ -328,6 +451,11 @@ export default {
             type: Number,
             default: 1,
         },
+        dualFilters: { type: Array, default: () => [] },
+        echo: { type: Number, default: 0 },
+        echoTime: { type: Number, default: 280 },
+        echoFeedback: { type: Number, default: 25 },
+        effectSettings: { type: Object, default: () => ({}) },
         originalBpm: {
             type: Number,
             default: null,
@@ -337,8 +465,52 @@ export default {
         'loop-change',
         'loop-playing',
         'loop-time',
+        'update:dual-filters',
+        'update:echo',
+        'update:echo-time',
+        'update:echo-feedback',
     ],
     setup(props, { emit, expose }) {
+        function rangeStyle(value, min, max) {
+            const percent = Math.max(0, Math.min(100, (value - min) / (max - min) * 100));
+            return { '--range-progress': `${percent}%` };
+        }
+        function filterHz(value) {
+            return 20 * Math.pow(1000, Number(value) / 1000);
+        }
+        function formatFrequency(value) {
+            const hz = filterHz(value);
+            return hz >= 1000 ? `${(hz / 1000).toFixed(2)} kHz` : `${Math.round(hz)} Hz`;
+        }
+        function changeFilter(index, patch) {
+            const next = props.dualFilters.map((filter, i) => i === index ? { ...filter, ...patch } : { ...filter });
+            emit('update:dual-filters', next);
+        }
+        const filterResponsePath = computed(() => {
+            const context = props.audioContext;
+            if (!context || !props.dualFilters.length) return 'M 0 75 L 600 75';
+            const length = 180;
+            const frequencies = new Float32Array(length);
+            const magnitudes = new Float32Array(length);
+            const phases = new Float32Array(length);
+            const combined = new Float32Array(length).fill(1);
+            for (let i = 0; i < length; i++) frequencies[i] = Math.min(context.sampleRate * 0.49, 20 * Math.pow(1000, i / (length - 1)));
+            for (const filter of props.dualFilters) {
+                if (!filter.enabled) continue;
+                const node = context.createBiquadFilter();
+                node.type = filter.type;
+                node.frequency.value = Math.min(filterHz(filter.frequency), context.sampleRate * 0.49);
+                node.Q.value = filter.q;
+                node.getFrequencyResponse(frequencies, magnitudes, phases);
+                for (let i = 0; i < length; i++) combined[i] *= magnitudes[i];
+                node.disconnect();
+            }
+            return Array.from(combined, (gain, i) => {
+                const db = 20 * Math.log10(Math.max(gain, 0.00001));
+                const y = Math.max(4, Math.min(146, 75 - db * 1.6));
+                return `${i ? 'L' : 'M'} ${(i / (length - 1) * 600).toFixed(1)} ${y.toFixed(1)}`;
+            }).join(' ');
+        });
         const start = ref(0);
         const end = ref(0);
         const direction = ref('forward');
@@ -1420,6 +1592,60 @@ value.charCodeAt(index)
                 { type: 'audio/wav' }
             );
         }
+        async function renderExportEffects(buffer) {
+            const settings = props.effectSettings || {};
+            const filters = settings.filters || [];
+            const echoMix = Math.max(0, Math.min(0.7, (settings.echo || 0) / 100));
+            const delaySeconds = Math.max(0.05, Math.min(1.5, (settings.echoTime || 280) / 1000));
+            const feedbackAmount = Math.max(0, Math.min(0.85, (settings.echoFeedback || 0) / 100));
+            const tail = echoMix > 0 ? Math.min(12, delaySeconds * Math.log(0.001) / Math.log(Math.max(0.01, feedbackAmount))) : 0;
+            const frames = Math.ceil((buffer.duration + tail) * buffer.sampleRate);
+            const offline = new OfflineAudioContext(Math.min(buffer.numberOfChannels, 2), frames, buffer.sampleRate);
+            const source = offline.createBufferSource();
+            source.buffer = buffer;
+            const bass = offline.createBiquadFilter();
+            bass.type = 'lowshelf';
+            bass.frequency.value = 200;
+            bass.gain.value = settings.bass || 0;
+            const treble = offline.createBiquadFilter();
+            treble.type = 'highshelf';
+            treble.frequency.value = 3400;
+            treble.gain.value = settings.treble || 0;
+            source.connect(bass);
+            bass.connect(treble);
+            let output = treble;
+            for (const filter of filters) {
+                if (!filter.enabled) continue;
+                const node = offline.createBiquadFilter();
+                node.type = filter.type;
+                node.frequency.value = Math.min(filterHz(filter.frequency), buffer.sampleRate * 0.49);
+                node.Q.value = filter.q;
+                output.connect(node);
+                output = node;
+            }
+            const pan = offline.createStereoPanner();
+            pan.pan.value = (settings.pan || 0) / 100;
+            output.connect(pan);
+            const master = offline.createGain();
+            master.gain.value = settings.volume ?? 1;
+            pan.connect(master);
+            if (echoMix > 0) {
+                const delay = offline.createDelay(1.5);
+                const feedback = offline.createGain();
+                const wet = offline.createGain();
+                delay.delayTime.value = delaySeconds;
+                feedback.gain.value = feedbackAmount;
+                wet.gain.value = echoMix;
+                output.connect(delay);
+                delay.connect(feedback);
+                feedback.connect(delay);
+                delay.connect(wet);
+                wet.connect(master);
+            }
+            master.connect(offline.destination);
+            source.start();
+            return offline.startRendering();
+        }
         async function exportLoop() {
             if (
                 !hasTrack.value ||
@@ -1478,9 +1704,8 @@ value.charCodeAt(index)
                             output,
                             exportRate
                         );
-                    const wav = encodeWav(
-                        renderedOutput
-                    );
+                    const processedOutput = await renderExportEffects(renderedOutput);
+                    const wav = encodeWav(processedOutput);
                     const url =
                     URL.createObjectURL(wav);
                     const filename = trackName
@@ -1608,6 +1833,11 @@ value.charCodeAt(index)
             resetPitch,
         });
         return {
+            filterResponsePath,
+            rangeStyle,
+            formatFrequency,
+            changeFilter,
+            emit,
             start,
             end,
             direction,
@@ -2203,4 +2433,50 @@ value.charCodeAt(index)
 .waveform-zoom-buttons button:disabled { opacity: 0.35; cursor: default; }
 .waveform-zoom-buttons strong { min-width: 42px; text-align: center; color: #fff; font-weight: 400; }
 .waveform-pan { width: 100%; margin: 0 0 10px; accent-color: #fff; }
+
+.looper-effects {
+    border: 1px solid #444;
+    padding: 16px;
+    margin: 16px 0 20px;
+    display: grid;
+    gap: 20px;
+}
+.looper-effects-heading, .dual-filter-heading, .echo-header, .filter-module-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+}
+.looper-effects-heading span, .dual-filter-heading span, .echo-header span {
+    font-size: 10px;
+    color: #999;
+}
+.filter-response svg {
+    width: 100%;
+    height: 145px;
+    display: block;
+    background: #171717;
+}
+.filter-response-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #999;
+    margin-top: 5px;
+}
+.dual-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }
+.filter-module { display: grid; gap: 14px; background: #171717; padding: 14px; min-width: 0; }
+.filter-module label, .echo-controls label { display: grid; gap: 8px; font-size: 12px; min-width: 0; }
+.filter-module select { width: 100%; background: #222; border: 1px solid #666; color: white; padding: 8px; }
+.filter-power { border: 1px solid #777; padding: 5px 9px; font-size: 10px; }
+.filter-power.active { background: white; color: black; }
+.filter-module input, .echo-controls input { width: 100%; }
+.filter-module .control-heading, .echo-controls .control-heading { display: flex; justify-content: space-between; gap: 10px; }
+.echo-controls { border-top: 1px solid #444; padding-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+.echo-header { grid-column: 1 / -1; }
+@media (max-width: 600px) {
+    .dual-filter-grid { grid-template-columns: 1fr; }
+    .echo-controls { grid-template-columns: 1fr; }
+}
 </style>
