@@ -4,6 +4,10 @@
             <strong>THE LOOPER</strong>
             <span>{{ loopEnabled ? 'LOOP ACTIVE' : 'A / B' }}</span>
         </div>
+        <div v-if="stemSourceUrl" class="stem-source-control">
+            <span>LOOP SOURCE: <strong>{{ stemName || 'STEM' }}</strong></span>
+            <button type="button" @click="emit('clear-stem')">USE ORIGINAL TRACK</button>
+        </div>
         <p class="description">
             Select a section to repeat or download as WAV.
         </p>
@@ -23,6 +27,45 @@
                 }}
             </button>
         </div>
+        <div class="slice-mode-section">
+            <div class="slice-mode-header">
+                <span>SLICE MODE</span>
+                <span>{{ sliceMode === 'transient' ? '10 SLICES · A / B CROP' : 'MANUAL A / B' }}</span>
+            </div>
+            <div class="slice-mode-buttons" role="group" aria-label="Slice mode">
+                <button type="button" :class="{ active: sliceMode === 'time' }" :aria-pressed="sliceMode === 'time'" @click="setSliceMode('time')">TIME</button>
+                <button type="button" :class="{ active: sliceMode === 'transient' }" :aria-pressed="sliceMode === 'transient'" @click="setSliceMode('transient')">TRANSIENT</button>
+            </div>
+            <div v-if="sliceMode === 'transient'" class="transient-controls">
+                <label for="transient-sensitivity" class="transient-sensitivity-heading">
+                    <span>SENSITIVITY</span>
+                    <strong>{{ transientSensitivity }}%</strong>
+                </label>
+                <input
+                    id="transient-sensitivity"
+                    v-model.number="transientSensitivity"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    :disabled="!hasTrack || !transientReady"
+                    :style="rangeStyle(transientSensitivity, 0, 100)"
+                    aria-label="Transient detection sensitivity"
+                />
+                <p class="transient-hint">{{ transientReady ? 'TEN SLICES FROM THE A / B SELECTION. RETURN TO TIME TO CHANGE THE CROP.' : 'ANALYZING AUDIO FOR TRANSIENTS…' }}</p>
+                <div v-if="slices.length" class="slice-list" aria-label="Detected slices">
+                    <button
+                        v-for="(slice, index) in slices"
+                        :key="`${slice.start}-${index}`"
+                        type="button"
+                        :class="{ active: selectedSliceIndex === index }"
+                        :aria-pressed="selectedSliceIndex === index"
+                        :title="`${formatPreciseTime(slice.start)} – ${formatPreciseTime(slice.end)}`"
+                        @click="selectSlice(index)"
+                    >{{ index === 9 ? '0' : index + 1 }}</button>
+                </div>
+            </div>
+        </div>
         <div class="waveform-zoom">
             <span>WAVEFORM ZOOM</span>
             <div class="waveform-zoom-buttons">
@@ -38,7 +81,7 @@
             class="waveform-pan"
             type="range"
             :min="0"
-            :max="Math.max(0, duration - visibleDuration)"
+            :max="Math.max(0, activeDuration - visibleDuration)"
             :step="Math.max(0.001, visibleDuration / 500)"
             aria-label="Pan zoomed waveform"
         />
@@ -62,6 +105,14 @@
                 class="selection"
                 :style="selectionStyle"
             ></div>
+            <template v-if="sliceMode === 'transient'">
+                <div
+                    v-for="(marker, index) in visibleSliceMarkers"
+                    :key="`slice-marker-${index}`"
+                    class="slice-marker"
+                    :style="{ left: `${marker.percent}%` }"
+                ></div>
+            </template>
             <div
                 class="playhead"
                 :style="{ left: `${playheadPercent}%` }"
@@ -74,7 +125,7 @@
         <div class="keyboard-section">
             <div class="keyboard-header">
                 <span>KEYBOARD CONTROL</span>
-                <span>{{ loopEnabled ? 'ENABLED' : 'STANDBY' }}</span>
+                <span>{{ sliceMode === 'transient' ? 'SLICE SELECT' : (loopEnabled ? 'ENABLED' : 'STANDBY') }}</span>
             </div>
             <div class="position-controls">
                 <button
@@ -83,16 +134,16 @@
                     type="button"
                     :disabled="!hasTrack"
                     :class="{
-                        active: activePosition === position.index
+                        active: sliceMode === 'transient' ? selectedSliceIndex === position.index : activePosition === position.index
                     }"
-                    :aria-label="`Move loop to ${position.percent}%`"
+                    :aria-label="sliceMode === 'transient' ? `Select slice ${position.index + 1}` : `Move loop to ${position.percent}%`"
                     @click="moveLoopToPosition(position.index)"
                 >
                     {{ position.key }}
                 </button>
             </div>
             <p class="keyboard-description">
-                1–9 / 0 — Move loop start in 10% increments.
+                {{ sliceMode === 'transient' ? '1–9 / 0 — Select slices 1–10.' : '1–9 / 0 — Move loop start in 10% increments.' }}
             </p>
             <div class="pitch-header">
                 <span>PITCH / SPEED</span>
@@ -280,9 +331,9 @@
                     v-model.number="start"
                     type="number"
                     min="0"
-                    :max="duration"
+                    :max="activeDuration"
                     step="0.01"
-                    :disabled="!hasTrack"
+                    :disabled="!hasTrack || sliceMode === 'transient'"
                     @change="normalizePoints"
                 />
             </label>
@@ -292,9 +343,9 @@
                     v-model.number="end"
                     type="number"
                     min="0"
-                    :max="duration"
+                    :max="activeDuration"
                     step="0.01"
-                    :disabled="!hasTrack"
+                    :disabled="!hasTrack || sliceMode === 'transient'"
                     @change="normalizePoints"
                 />
             </label>
@@ -426,6 +477,8 @@ export default {
             type: String,
             default: '',
         },
+        stemSourceUrl: { type: String, default: '' },
+        stemName: { type: String, default: '' },
         trackName: {
             type: String,
             default: 'track',
@@ -462,6 +515,7 @@ export default {
     },
     emits: [
         'loop-change',
+        'clear-stem',
         'loop-playing',
         'loop-time',
         'update:dual-filters',
@@ -510,6 +564,20 @@ export default {
                 return `${i ? 'L' : 'M'} ${(i / (length - 1) * 600).toFixed(1)} ${y.toFixed(1)}`;
             }).join(' ');
         });
+        const sliceMode = ref('time');
+        const transientSensitivity = ref(50);
+        const transientReady = ref(false);
+        const transientCandidates = ref([]);
+        const slices = ref([]);
+        const selectedSliceIndex = ref(-1);
+        const sampleStart = ref(0);
+        const sampleEnd = ref(0);
+        const visibleSliceMarkers = computed(() => {
+            if (sliceMode.value !== 'transient' || !visibleDuration.value) return [];
+            return slices.value.slice(1).map((slice) => ({
+                percent: (slice.start - viewStart.value) / visibleDuration.value * 100,
+            })).filter((marker) => marker.percent >= 0 && marker.percent <= 100);
+        });
         const start = ref(0);
         const end = ref(0);
         const direction = ref('forward');
@@ -528,18 +596,21 @@ export default {
         const waveformRef = ref(null);
         const zoomLevel = ref(1);
         const viewStart = ref(0);
-        const visibleDuration = computed(() => props.duration > 0 ? props.duration / zoomLevel.value : 0);
+        const activeSourceUrl = computed(() => props.stemSourceUrl || props.sourceUrl);
+        const sourceDuration = ref(0);
+        const activeDuration = computed(() => props.stemSourceUrl ? (sourceDuration.value || props.duration) : props.duration);
+        const visibleDuration = computed(() => activeDuration.value > 0 ? activeDuration.value / zoomLevel.value : 0);
         const visibleWaveform = computed(() => {
             const bars = waveform.value;
             const count = bars.length;
             return Array.from({ length: count }, (_, index) => {
                 const time = viewStart.value + (index + 0.5) / count * visibleDuration.value;
-                const originalIndex = Math.min(count - 1, Math.max(0, Math.floor(time / Math.max(props.duration, 0.001) * count)));
+                const originalIndex = Math.min(count - 1, Math.max(0, Math.floor(time / Math.max(activeDuration.value, 0.001) * count)));
                 return bars[originalIndex];
             });
         });
         function clampViewStart(value) {
-            return Math.max(0, Math.min(Math.max(0, props.duration - visibleDuration.value), value));
+            return Math.max(0, Math.min(Math.max(0, activeDuration.value - visibleDuration.value), value));
         }
         function setZoom(next) {
             const center = viewStart.value + visibleDuration.value / 2;
@@ -612,9 +683,9 @@ export default {
         const hasTrack = computed(() => {
             return Boolean(
             props.audioElement &&
-            props.sourceUrl &&
-            Number.isFinite(props.duration) &&
-            props.duration > 0
+            activeSourceUrl.value &&
+            Number.isFinite(activeDuration.value) &&
+            activeDuration.value > 0
             );
         });
         const loopLength = computed(() => {
@@ -697,10 +768,10 @@ export default {
             return `${value > 0 ? '+' : ''}${value} ST`;
         });
         const activePosition = computed(() => {
-            if (!props.duration) {
+            if (!activeDuration.value) {
                 return -1;
             }
-            const ratio = start.value / props.duration;
+            const ratio = start.value / activeDuration.value;
             const index = Math.round(ratio * 10);
             if (
                 index < 0 ||
@@ -748,11 +819,130 @@ export default {
             const seconds = (value % 60).toFixed(2);
             return `${minutes}:${seconds.padStart(5, '0')}`;
         }
+        function analyzeTransients(decoded) {
+            // Short-time RMS increases emphasize attacks while avoiding full-resolution FFT work.
+            const sampleRate = decoded.sampleRate;
+            const hop = Math.max(128, Math.round(sampleRate * 0.01));
+            const frameSize = Math.max(hop * 2, Math.round(sampleRate * 0.025));
+            const frameCount = Math.max(1, Math.floor((decoded.length - frameSize) / hop) + 1);
+            const energies = new Float32Array(frameCount);
+            const channels = Math.min(decoded.numberOfChannels, 2);
+            const channelData = Array.from({ length: channels }, (_, i) => decoded.getChannelData(i));
+            const stride = Math.max(1, Math.floor(frameSize / 256));
+            for (let frame = 0; frame < frameCount; frame++) {
+                const from = frame * hop;
+                let energy = 0;
+                let samples = 0;
+                for (let i = 0; i < frameSize; i += stride) {
+                    for (let channel = 0; channel < channels; channel++) {
+                        const value = channelData[channel][from + i] || 0;
+                        energy += value * value;
+                        samples++;
+                    }
+                }
+                energies[frame] = Math.sqrt(energy / Math.max(1, samples));
+            }
+            const novelty = new Float32Array(frameCount);
+            const positive = [];
+            for (let frame = 2; frame < frameCount - 2; frame++) {
+                const baseline = (energies[frame - 1] + energies[frame - 2]) * 0.5;
+                const value = Math.max(0, energies[frame] - baseline);
+                novelty[frame] = value;
+                if (value > 0) positive.push(value);
+            }
+            positive.sort((a, b) => a - b);
+            const percentile = (fraction) => positive[Math.min(positive.length - 1, Math.floor(fraction * (positive.length - 1)))] || 0;
+            const reference = percentile(0.95);
+            const floor = Math.max(0.0001, percentile(0.5) * 1.5);
+            const candidates = [];
+            for (let frame = 3; frame < frameCount - 3; frame++) {
+                const strength = novelty[frame];
+                if (strength < floor || strength < novelty[frame - 1] || strength <= novelty[frame + 1]) continue;
+                const time = Math.max(0, (frame * hop - frameSize * 0.25) / sampleRate);
+                if (time < 0.035 || time > decoded.duration - 0.035) continue;
+                candidates.push({ time, strength: reference > 0 ? strength / reference : 0 });
+            }
+            transientCandidates.value = candidates;
+            transientReady.value = true;
+            rebuildSlices();
+        }
+        function rebuildSlices() {
+            if (!transientReady.value || !activeDuration.value) {
+                slices.value = [];
+                selectedSliceIndex.value = -1;
+                return;
+            }
+            // Only the previously cropped A/B sample is divided into ten playable pads.
+            const from = Math.max(0, Math.min(sampleStart.value, activeDuration.value));
+            const to = Math.max(from, Math.min(sampleEnd.value, activeDuration.value));
+            const length = to - from;
+            if (length <= 0) return;
+            const threshold = 1.6 - transientSensitivity.value / 100 * 1.5;
+            const candidates = transientCandidates.value.filter((candidate) =>
+                candidate.time > from && candidate.time < to && candidate.strength >= threshold
+            );
+            const boundaries = [from];
+            // Ten pads means nine internal boundaries. Search around each evenly
+            // spaced target for the strongest nearby onset; otherwise use the target.
+            for (let index = 1; index < 10; index++) {
+                const target = from + length * index / 10;
+                const previous = boundaries[boundaries.length - 1];
+                const remaining = 10 - index;
+                const minimum = Math.max(length / 1000, 0.00001);
+                const lower = previous + minimum;
+                const upper = to - remaining * minimum;
+                const radius = length / 20;
+                const nearby = candidates.filter((candidate) =>
+                    candidate.time >= lower && candidate.time <= upper &&
+                    Math.abs(candidate.time - target) <= radius
+                );
+                nearby.sort((a, b) =>
+                    (b.strength - Math.abs(b.time - target) / Math.max(radius, 0.001)) -
+                    (a.strength - Math.abs(a.time - target) / Math.max(radius, 0.001))
+                );
+                boundaries.push(Math.max(lower, Math.min(upper, nearby[0]?.time ?? target)));
+            }
+            boundaries.push(to);
+            slices.value = Array.from({ length: 10 }, (_, index) => ({
+                start: boundaries[index],
+                end: boundaries[index + 1],
+            }));
+            if (sliceMode.value === 'transient') {
+                selectSlice(Math.max(0, Math.min(9, selectedSliceIndex.value)));
+            }
+        }
+        function selectSlice(index) {
+            if (sliceMode.value !== 'transient' || index < 0 || index >= slices.value.length) return;
+            const slice = slices.value[index];
+            selectedSliceIndex.value = index;
+            start.value = slice.start;
+            end.value = slice.end;
+        }
+        function setSliceMode(mode) {
+            if (sliceMode.value === mode) return;
+            if (mode === 'transient') {
+                // Capture the A/B crop once; selecting pads never changes the crop.
+                normalizePoints();
+                sampleStart.value = start.value;
+                sampleEnd.value = end.value;
+                sliceMode.value = mode;
+                if (transientReady.value) {
+                    rebuildSlices();
+                } else if (decodedCache && decodedCacheUrl === activeSourceUrl.value) {
+                    analyzeTransients(decodedCache);
+                }
+            } else {
+                sliceMode.value = mode;
+                selectedSliceIndex.value = -1;
+                start.value = sampleStart.value;
+                end.value = sampleEnd.value;
+            }
+        }
         function normalizePoints() {
             if (!hasTrack.value) {
                 return;
             }
-            const maximum = props.duration;
+            const maximum = activeDuration.value;
             const minimum = Math.min(0.01, maximum);
             start.value = Math.max(
                 0,
@@ -786,7 +976,7 @@ Number(end.value) || maximum,
                 return;
             }
             const position = getPointerPosition(event);
-            const minimum = Math.min(0.01, props.duration);
+            const minimum = Math.min(0.01, activeDuration.value);
             if (activeHandle === 'start') {
                 start.value = Math.max(
                     0,
@@ -797,7 +987,7 @@ Number(end.value) || maximum,
                 );
             } else {
                 end.value = Math.min(
-                props.duration,
+                activeDuration.value,
                     Math.max(
                         position,
                         start.value + minimum
@@ -810,6 +1000,14 @@ Number(end.value) || maximum,
                 return;
             }
             const position = getPointerPosition(event);
+            if (sliceMode.value === 'transient') {
+                const index = slices.value.findIndex((slice, i) =>
+                    position >= slice.start &&
+                    (position < slice.end || i === slices.value.length - 1)
+                );
+                if (index !== -1) selectSlice(index);
+                return;
+            }
             activeHandle =
                 Math.abs(position - start.value) <=
                 Math.abs(position - end.value)
@@ -846,6 +1044,10 @@ Number(end.value) || maximum,
             if (!hasTrack.value) {
                 return;
             }
+            if (sliceMode.value === 'transient') {
+                selectSlice(index);
+                return;
+            }
             if (
                 !Number.isInteger(index) ||
                 index < 0 ||
@@ -858,9 +1060,9 @@ Number(end.value) || maximum,
                 loopLength.value
             );
             const nextStart =
-            props.duration * (index / 10);
+            activeDuration.value * (index / 10);
             const nextEnd = Math.min(
-            props.duration,
+            activeDuration.value,
                 nextStart + length
             );
             start.value = nextStart;
@@ -1098,9 +1300,24 @@ offset,
                         'AbortError'
                     );
                 }
-                if (url === props.sourceUrl) {
+                if (url === activeSourceUrl.value) {
                     decodedCache = decoded;
                     decodedCacheUrl = url;
+                    sourceDuration.value = decoded.duration;
+                    const peaks = [];
+                    const data = decoded.getChannelData(0);
+                    const segments = 64;
+                    for (let i = 0; i < segments; i++) {
+                        const from = Math.floor(i * data.length / segments);
+                        const to = Math.floor((i + 1) * data.length / segments);
+                        let peak = 0;
+                        for (let j = from; j < to; j += Math.max(1, Math.floor((to - from) / 200))) {
+                            peak = Math.max(peak, Math.abs(data[j]));
+                        }
+                        peaks.push(Math.max(3, peak * 100));
+                    }
+                    waveform.value = peaks;
+                    analyzeTransients(decoded);
                 }
                 return decoded;
             } finally {
@@ -1236,7 +1453,7 @@ selectedDirection === 'pingpong'
             const selectedEnd = end.value;
             const selectedDirection = direction.value;
             const decoded = await decodeAudio(
-            props.sourceUrl,
+            activeSourceUrl.value,
 controller.signal
             );
             if (
@@ -1448,7 +1665,10 @@ requestId !== playbackRequestId
         function resetLoop() {
             stopLoop();
             start.value = 0;
-            end.value = props.duration || 0;
+            end.value = activeDuration.value || 0;
+            sampleStart.value = 0;
+            sampleEnd.value = activeDuration.value || 0;
+            if (sliceMode.value === 'transient' && transientReady.value) rebuildSlices();
             error.value = '';
         }
         function applyExportPlaybackRate(
@@ -1656,7 +1876,7 @@ value.charCodeAt(index)
             const selectedStart = start.value;
             const selectedEnd = end.value;
             const selectedDirection = direction.value;
-            const sourceUrl = props.sourceUrl;
+            const sourceUrl = activeSourceUrl.value;
             const trackName = props.trackName;
             const exportRate = Math.max(
                 0.01,
@@ -1712,10 +1932,13 @@ value.charCodeAt(index)
                         .trim()
                         .replace(/\s+/g, '-')
                         .toLowerCase() || 'track';
-                    const suffix =
-                        selectedDirection === 'forward'
-                            ? 'loop'
-                            : `loop-${selectedDirection}`;
+                    const sliceSuffix = sliceMode.value === 'transient' && selectedSliceIndex.value >= 0
+                        ? `slice-${selectedSliceIndex.value + 1}`
+                        : 'loop';
+                    const suffix = selectedDirection === 'forward'
+                        ? sliceSuffix
+                        : `${sliceSuffix}-${selectedDirection}`;
+                    const stemSuffix = props.stemName ? `-${props.stemName.toLowerCase().replace(/[^a-z0-9-]/g, '')}` : '';
                     const bpmSuffix = exportBpm === null
                         ? ''
                         : `-${exportBpm}bpm`;
@@ -1726,7 +1949,7 @@ value.charCodeAt(index)
                         document.createElement('a');
                     link.href = url;
                     link.download =
-                        `${filename}-${suffix}${bpmSuffix}${pitchSuffix}.wav`;
+                        `${filename}${stemSuffix}-${suffix}${bpmSuffix}${pitchSuffix}.wav`;
                     document.body.appendChild(link);
                     link.click();
                     link.remove();
@@ -1756,21 +1979,35 @@ value.charCodeAt(index)
             }
         }
         watch(
-            () => props.sourceUrl,
+            activeSourceUrl,
             () => {
                 exportRequestId++;
                 exportController?.abort();
                 exporting.value = false;
                 decodedCache = null;
                 decodedCacheUrl = '';
+                transientReady.value = false;
+                transientCandidates.value = [];
+                slices.value = [];
+                selectedSliceIndex.value = -1;
+                sampleStart.value = 0;
+                sampleEnd.value = 0;
+                sourceDuration.value = 0;
                 resetLoop();
                 resetZoom();
                 resetPitch();
+                if (activeSourceUrl.value) {
+                    const controller = new AbortController();
+                    void decodeAudio(activeSourceUrl.value, controller.signal).then((buffer) => {
+                        if (activeSourceUrl.value !== decodedCacheUrl) return;
+                        end.value = buffer.duration;
+                    }).catch(() => {});
+                }
             },
             { flush: 'sync' }
         );
         watch(
-            () => props.duration,
+            () => activeDuration.value,
             (value) => {
                 if (!loopEnabled.value) {
                     start.value = 0;
@@ -1780,10 +2017,15 @@ value.charCodeAt(index)
                 } else {
                     normalizePoints();
                 }
+                if (sliceMode.value === 'transient' && transientReady.value && sampleEnd.value > value) {
+                    sampleEnd.value = value;
+                    rebuildSlices();
+                }
                 viewStart.value = clampViewStart(viewStart.value);
             },
             { immediate: true }
         );
+        watch(transientSensitivity, rebuildSlices);
         watch([start, end], () => {
             if (!loopEnabled.value || preparing.value) {
                 return;
@@ -1805,6 +2047,11 @@ value.charCodeAt(index)
             }
         });
         onMounted(() => {
+            if (activeSourceUrl.value) {
+                void decodeAudio(activeSourceUrl.value).then((buffer) => {
+                    if (activeSourceUrl.value === decodedCacheUrl) end.value = buffer.duration;
+                }).catch(() => {});
+            }
             window.addEventListener(
                 'keydown',
                 onKeyDown
@@ -1824,6 +2071,8 @@ value.charCodeAt(index)
             startLoop,
             stopLoop,
             pauseLoop,
+            selectSlice,
+            setSliceMode,
             resumeLoop,
             seekLoop,
             updateLoopRate,
@@ -1832,6 +2081,14 @@ value.charCodeAt(index)
             resetPitch,
         });
         return {
+            sliceMode,
+            transientSensitivity,
+            transientReady,
+            slices,
+            selectedSliceIndex,
+            visibleSliceMarkers,
+            selectSlice,
+            setSliceMode,
             filterResponsePath,
             rangeStyle,
             formatFrequency,
@@ -1868,6 +2125,7 @@ value.charCodeAt(index)
             zoomLevel,
             viewStart,
             visibleDuration,
+            activeDuration,
             visibleWaveform,
             isVisibleSelected,
             zoomIn,
@@ -1902,6 +2160,53 @@ value.charCodeAt(index)
     margin-top: 5px;
     color: #fff;
 }
+.slice-mode-section {
+    border-top: 1px solid #333;
+    margin-top: 18px;
+    padding-top: 15px;
+}
+.slice-mode-header, .transient-sensitivity-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    color: #999;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+}
+.slice-mode-header span:last-child, .transient-sensitivity-heading strong { color: #fff; font-weight: 400; }
+.slice-mode-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
+.slice-mode-buttons button, .slice-list button {
+    background: #000;
+    border: 1px solid #555;
+    color: #aaa;
+    min-height: 34px;
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+}
+.slice-mode-buttons button.active, .slice-list button.active,
+.slice-mode-buttons button:hover, .slice-list button:hover { background: #fff; color: #000; border-color: #fff; }
+.transient-controls { margin-top: 16px; }
+.transient-controls input[type="range"] {
+    width: 100%; height: 18px; margin: 12px 0 0;
+    appearance: none; -webkit-appearance: none; background: transparent;
+}
+.transient-controls input[type="range"]::-webkit-slider-runnable-track {
+    height: 3px;
+    background: linear-gradient(to right, #fff var(--range-progress), #555 var(--range-progress));
+}
+.transient-controls input[type="range"]::-moz-range-track { height: 3px; background: #555; }
+.transient-controls input[type="range"]::-moz-range-progress { height: 3px; background: #fff; }
+.transient-controls input[type="range"]::-webkit-slider-thumb {
+    width: 11px; height: 16px; margin-top: -6.5px;
+    appearance: none; -webkit-appearance: none; background: #fff; border: 1px solid #fff;
+}
+.transient-controls input[type="range"]::-moz-range-thumb { width: 11px; height: 16px; background: #fff; border: 1px solid #fff; border-radius: 0; }
+.transient-controls input[type="range"]:disabled { opacity: 0.4; }
+.transient-hint { color: #777; font-size: 10px; margin: 9px 0 0; line-height: 1.5; }
+.slice-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; margin-top: 12px; max-height: 140px; overflow-y: auto; }
+.slice-marker { position: absolute; top: 0; bottom: 0; width: 1px; background: #aaa; opacity: 0.9; pointer-events: none; }
 .looper-header {
     display: flex;
     align-items: center;
@@ -2539,4 +2844,23 @@ value.charCodeAt(index)
     outline-offset: 3px;
 }
 
+
+.stem-source-control {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #fff;
+    padding: 12px;
+    margin-top: 16px;
+    font-size: 11px;
+}
+.stem-source-control button {
+    background: #000;
+    color: #fff;
+    border: 1px solid #777;
+    padding: 8px;
+    cursor: pointer;
+}
+.stem-source-control button:hover { background: #fff; color: #000; }
 </style>

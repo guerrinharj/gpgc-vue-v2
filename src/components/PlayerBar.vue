@@ -1,9 +1,9 @@
 <template>
     <aside class="audio-player" :class="{ expanded: showAudioTools }" aria-label="Audio player">
         <audio
-            ref="audioRef"
-            crossorigin="anonymous"
-            preload="metadata"
+ref="audioRef"
+crossorigin="anonymous"
+preload="metadata"
             @loadedmetadata="onMetadata"
             @timeupdate="onTime"
             @ended="onEnded"
@@ -27,69 +27,69 @@
             </div>
             <div class="transport">
                 <button
-                    type="button"
-                    aria-label="Previous track"
+type="button"
+aria-label="Previous track"
                     :disabled="!currentTrack"
                     @click="previous"
                 >←</button>
                 <button
-                    type="button"
+type="button"
                     :aria-label="playing ? 'Pause' : 'Play'"
                     :disabled="!currentTrack"
                     @click="toggle"
                 >{{ playing ? 'Ⅱ' : '▶' }}</button>
                 <button
-                    type="button"
-                    aria-label="Next track"
+type="button"
+aria-label="Next track"
                     :disabled="!currentTrack"
                     @click="next"
                 >→</button>
                 <button
-                    type="button"
-                    class="shuffle-button"
+type="button"
+class="shuffle-button"
                     :class="{ active: radioMode }"
                     :aria-pressed="radioMode"
                     :disabled="shuffleLoading"
                     :title="radioMode ? 'Restart shuffle' : 'Shuffle tracks from 2018 onward'"
-                    aria-label="Shuffle tracks from 2018 onward"
+aria-label="Shuffle tracks from 2018 onward"
                     @click="startShuffle"
                 >⤨</button>
             </div>
         </div>
         <p
             v-if="shuffleLoading"
-            class="shuffle-status"
-            role="status"
+class="shuffle-status"
+role="status"
         >
             Loading shuffle…
         </p>
         <p
             v-if="shuffleError"
-            class="player-error"
-            role="status"
+class="player-error"
+role="status"
         >
             {{ shuffleError }}
         </p>
         <div class="seek-line">
             <span>{{ formatTime(currentTime) }}</span>
             <input
-                type="range"
-                min="0"
-                max="1000"
+type="range"
+min="0"
+max="1000"
                 :value="progress"
                 :disabled="!duration"
                 :style="rangeStyle(progress, 0, 1000)"
-                aria-label="Track position"
+aria-label="Track position"
                 @input="seek"
             />
             <span>{{ formatTime(duration) }}</span>
         </div>
         <div class="tools-bar">
             <button
-                type="button"
-                class="tools-toggle"
+type="button"
+class="tools-toggle"
                 :aria-expanded="showAudioTools"
-                aria-controls="audio-tools-panel"
+aria-controls="audio-tools-panel"
                 @click="toggleAudioTools"
             >
                 <span class="tools-icon">☷</span>
@@ -101,46 +101,46 @@
             <label for="player-volume" class="volume-label">
                 <span>Volume</span>
                 <input
-                    id="player-volume"
-            v-model.number="volume"
-                    type="range"
-                    min="0"
-                    max="100"
+id="player-volume"
+v-model.number="volume"
+type="range"
+min="0"
+max="100"
                     :style="rangeStyle(volume, 0, 100)"
                     @input="updateVolume"
                 />
             </label>
         </div>
         <div
-            v-show="showAudioTools"
-            id="audio-tools-panel"
-            class="audio-tools-panel"
+v-show="showAudioTools"
+id="audio-tools-panel"
+class="audio-tools-panel"
         >
             <div class="tools-panel-heading">
                 <span>AUDIO TOOLS</span>
                 <button type="button" @click="toggleAudioTools">CLOSE AUDIO TOOLS ×</button>
             </div>
             <div
-                class="tool-tabs"
-                role="group"
-                aria-label="Audio tools"
+class="tool-tabs"
+role="group"
+aria-label="Audio tools"
             >
                 <button
-                    type="button"
-                    class="tool-tab"
+type="button"
+class="tool-tab"
                     :class="{ active: activeTool === 'sound' }"
                     :aria-pressed="activeTool === 'sound'"
-                    aria-controls="player-effects"
+aria-controls="player-effects"
                     @click="toggleTool('sound')"
                 >
                     <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.6"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
+viewBox="0 0 24 24"
+fill="none"
+stroke="currentColor"
+stroke-width="1.6"
+stroke-linecap="round"
+stroke-linejoin="round"
+aria-hidden="true"
                     >
                         <line x1="4" y1="7" x2="20" y2="7" />
                         <line x1="4" y1="17" x2="20" y2="17" />
@@ -150,20 +150,20 @@
                     <span>Sound</span>
                 </button>
                 <button
-                    type="button"
-                    class="tool-tab"
+type="button"
+class="tool-tab"
                     :class="{ active: activeTool === 'stems' }"
                     :aria-pressed="activeTool === 'stems'"
-                    aria-controls="player-stems"
+aria-controls="player-stems"
                     @click="toggleTool('stems')"
                 >
                     <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.6"
-                        stroke-linecap="round"
-                        aria-hidden="true"
+viewBox="0 0 24 24"
+fill="none"
+stroke="currentColor"
+stroke-width="1.6"
+stroke-linecap="round"
+aria-hidden="true"
                     >
                         <line x1="4" y1="10" x2="4" y2="14" />
                         <line x1="8" y1="5" x2="8" y2="19" />
@@ -174,21 +174,21 @@
                     <span>Stems</span>
                 </button>
                 <button
-                    type="button"
-                    class="tool-tab"
+type="button"
+class="tool-tab"
                     :class="{ active: activeTool === 'looper' }"
                     :aria-pressed="activeTool === 'looper'"
-                    aria-controls="player-looper"
+aria-controls="player-looper"
                     @click="toggleTool('looper')"
                 >
                     <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.6"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
+viewBox="0 0 24 24"
+fill="none"
+stroke="currentColor"
+stroke-width="1.6"
+stroke-linecap="round"
+stroke-linejoin="round"
+aria-hidden="true"
                     >
                         <path d="M17 2l4 4-4 4" />
                         <path d="M3 11V9a3 3 0 0 1 3-3h15" />
@@ -198,11 +198,11 @@
                     <span>Looper</span>
                 </button>
                 <button
-                    type="button"
-                    class="tool-tab"
+type="button"
+class="tool-tab"
                     :class="{ active: activeTool === 'recorder' }"
                     :aria-pressed="activeTool === 'recorder'"
-                    aria-controls="player-recorder"
+aria-controls="player-recorder"
                     @click="toggleTool('recorder')"
                 >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
@@ -213,15 +213,15 @@
                 </button>
             </div>
             <div
-                v-show="activeTool === 'sound'"
-                id="player-effects"
-                class="tool-content"
+v-show="activeTool === 'sound'"
+id="player-effects"
+class="tool-content"
             >
                 <div class="tool-heading">
                     <strong>Sound Settings</strong>
                     <button
-                        type="button"
-                        class="heading-action"
+type="button"
+class="heading-action"
                         @click="resetEffects"
                     >
                         Reset
@@ -234,10 +234,10 @@
                             <output>{{ bass }} dB</output>
                         </span>
                         <input
-            v-model.number="bass"
-                            type="range"
-                            min="-12"
-                            max="12"
+v-model.number="bass"
+type="range"
+min="-12"
+max="12"
                             :style="rangeStyle(bass, -12, 12)"
                             @input="updateEffects"
                         />
@@ -248,10 +248,10 @@
                             <output>{{ treble }} dB</output>
                         </span>
                         <input
-            v-model.number="treble"
-                            type="range"
-                            min="-12"
-                            max="12"
+v-model.number="treble"
+type="range"
+min="-12"
+max="12"
                             :style="rangeStyle(treble, -12, 12)"
                             @input="updateEffects"
                         />
@@ -270,10 +270,10 @@
                             </output>
                         </span>
                         <input
-            v-model.number="pan"
-                            type="range"
-                            min="-100"
-                            max="100"
+v-model.number="pan"
+type="range"
+min="-100"
+max="100"
                             :style="rangeStyle(pan, -100, 100)"
                             @input="updateEffects"
                         />
@@ -288,7 +288,7 @@
                     </div>
                     <div class="mode-switch">
                         <button
-                            type="button"
+type="button"
                             :class="{ active: !vinylMode }"
                             :aria-pressed="!vinylMode"
                             @click="setVinylMode(false)"
@@ -296,7 +296,7 @@
                             Independent
                         </button>
                         <button
-                            type="button"
+type="button"
                             :class="{ active: vinylMode }"
                             :aria-pressed="vinylMode"
                             @click="setVinylMode(true)"
@@ -310,12 +310,12 @@
                             <output>{{ playbackRate.toFixed(2) }}×</output>
                         </span>
                         <input
-            v-model.number="speed"
-                            type="range"
-                            min="50"
-                            max="150"
-                            step="1"
-                            aria-label="Playback speed"
+v-model.number="speed"
+type="range"
+min="50"
+max="150"
+step="1"
+aria-label="Playback speed"
                             :style="rangeStyle(speed, 50, 150)"
                             @input="updateEffects"
                         />
@@ -345,9 +345,9 @@
                 </div>
             </div>
             <div
-                v-show="activeTool === 'stems'"
-                id="player-stems"
-                class="tool-content"
+v-show="activeTool === 'stems'"
+id="player-stems"
+class="tool-content"
             >
                 <div class="tool-heading">
                     <strong>Stem Separation</strong>
@@ -356,27 +356,31 @@
                     Separate individual elements of the current track.
                 </p>
                 <StemSeparator
-                    v-if="activeTool === 'stems' && currentTrack?.url"
+                    v-if="currentTrack?.url"
                     :key="currentTrack.url"
                     :source-url="currentTrack.url"
                     :track-name="currentTrack.name || 'track'"
                     :speed="speed"
                     :vinyl-mode="vinylMode"
+                    @send-to-looper="onSendStemToLooper"
                 />
                 <p v-else class="tool-empty">
                     Select a track to use Stem Separation.
                 </p>
             </div>
             <div
-                v-show="activeTool === 'looper'"
-                id="player-looper"
-                class="tool-content looper-content"
+v-show="activeTool === 'looper'"
+id="player-looper"
+class="tool-content looper-content"
             >
                 <TheLooper
-                    ref="looperRef"
+ref="looperRef"
                     :audio-element="audioRef"
                     :source-url="currentTrack?.url || ''"
+                    :stem-source-url="selectedLoopStem?.url || ''"
+                    :stem-name="selectedLoopStem?.name || ''"
                     :track-name="currentTrack?.name || 'track'"
+                    @clear-stem="selectedLoopStem = null"
                     :duration="duration"
                     :current-time="currentTime"
                     :audio-context="audioContext"
@@ -398,9 +402,9 @@
                 />
             </div>
             <div
-                v-show="activeTool === 'recorder'"
-                id="player-recorder"
-                class="tool-content recorder-content"
+v-show="activeTool === 'recorder'"
+id="player-recorder"
+class="tool-content recorder-content"
             >
                 <ThePerformanceRecorder
                     :audio-context="audioContext"
@@ -412,8 +416,8 @@
         </div>
         <p
             v-if="audioError"
-            class="player-error"
-            role="status"
+class="player-error"
+role="status"
         >
             {{ audioError }}
         </p>
@@ -452,6 +456,7 @@
         const shuffleError = ref('');
         const audioRef = ref(null);
         const looperRef = ref(null);
+        const selectedLoopStem = ref(null);
         const playing = ref(false);
         const loopActive = ref(false);
         const loopPlaying = ref(false);
@@ -508,12 +513,18 @@
         let trackRequestId = 0;
         function toggleAudioTools() {
             showAudioTools.value = !showAudioTools.value;
-
         }
         function toggleTool(tool) {
             activeTool.value = activeTool.value === tool
                 ? null
                 : tool;
+        }
+        function onSendStemToLooper(stem) {
+            if (!stem?.url) return;
+            stopActiveLoop();
+            selectedLoopStem.value = { id: stem.id, name: stem.name, url: stem.url };
+            activeTool.value = 'looper';
+            showAudioTools.value = true;
         }
         function onLoopChange(active) {
             loopActive.value = active;
@@ -873,13 +884,13 @@ source.connect(currentGraph.input);
                 [graph.filterOne, graph.filterTwo].forEach((node, index) => {
                     const settings = dualFilters.value[index];
                     const now = node.context.currentTime;
-                    node.type = settings.enabled ? settings.type : 'allpass';
-                    node.frequency.setTargetAtTime(
+node.type = settings.enabled ? settings.type : 'allpass';
+node.frequency.setTargetAtTime(
                         Math.min(filterHz(settings.frequency), node.context.sampleRate * 0.49),
                         now,
                         0.015
                     );
-                    node.Q.setTargetAtTime(settings.q, now, 0.015);
+node.Q.setTargetAtTime(settings.q, now, 0.015);
                 });
                 graph.wet.gain.setTargetAtTime(
                     echo.value / 100,
@@ -924,6 +935,7 @@ source.connect(currentGraph.input);
             async url => {
                 const requestId = ++trackRequestId;
                 stopActiveLoop();
+                selectedLoopStem.value = null;
                 analyzeBpm(url);
                 await nextTick();
                 if (requestId !== trackRequestId) {
@@ -968,6 +980,8 @@ source.connect(currentGraph.input);
             startShuffle,
             audioRef,
             looperRef,
+            selectedLoopStem,
+            onSendStemToLooper,
             audioContext,
             recordingStream,
             originalBpm,
@@ -1417,10 +1431,10 @@ background 180ms ease,
     border-radius: 0;
     background: linear-gradient(
         to right,
-        #fff 0%,
-        #fff var(--range-progress, 50%),
-        #444 var(--range-progress, 50%),
-        #444 100%
+        \#fff 0%,
+        \#fff var(--range-progress, 50%),
+        \#444 var(--range-progress, 50%),
+        \#444 100%
     );
     cursor: pointer;
 }
