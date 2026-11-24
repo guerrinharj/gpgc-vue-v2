@@ -440,6 +440,15 @@
                 {{ exporting ? 'EXPORTING…' : 'DOWNLOAD WAV' }}
             </button>
         </div>
+        <div class="actions download-actions">
+            <button
+                type="button"
+                :disabled="!hasTrack || exporting"
+                @click="exportAllSlots"
+            >
+                {{ exporting ? `EXPORTING ${exportProgress}/10…` : 'DOWNLOAD ALL 10 SLOTS (.ZIP)' }}
+            </button>
+        </div>
         <p v-if="error" class="error" role="status">
             {{ error }}
         </p>
@@ -580,6 +589,7 @@ export default {
         const loopPlaying = ref(false);
         const preparing = ref(false);
         const exporting = ref(false);
+        const exportProgress = ref(0);
         const error = ref('');
         const waveformRef = ref(null);
         const zoomLevel = ref(1);
@@ -1840,6 +1850,144 @@ value.charCodeAt(index)
             source.start();
             return offline.startRendering();
         }
+        // ZIP writer (STORE method): no third-party dependency or server required.
+        function zipArchive(entries) {
+            const encoder = new TextEncoder();
+            const localParts = [];
+            const centralParts = [];
+            let offset = 0;
+            const crcTable = new Uint32Array(256);
+            for (let n = 0; n < 256; n++) {
+                let c = n;
+                for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+                crcTable[n] = c >>> 0;
+            }
+            function crc32(bytes) {
+                let crc = 0xffffffff;
+                for (const byte of bytes) crc = crcTable[(crc ^ byte) & 255] ^ (crc >>> 8);
+                return (crc ^ 0xffffffff) >>> 0;
+            }
+            for (const entry of entries) {
+                const name = encoder.encode(entry.name);
+                const bytes = entry.bytes;
+                const crc = crc32(bytes);
+                const local = new Uint8Array(30 + name.length);
+                const lv = new DataView(local.buffer);
+                lv.setUint32(0, 0x04034b50, true);
+                lv.setUint16(4, 20, true);
+                lv.setUint16(6, 0x0800, true);
+                lv.setUint16(8, 0, true);
+                lv.setUint32(14, crc, true);
+                lv.setUint32(18, bytes.length, true);
+                lv.setUint32(22, bytes.length, true);
+                lv.setUint16(26, name.length, true);
+                local.set(name, 30);
+                localParts.push(local, bytes);
+
+                const central = new Uint8Array(46 + name.length);
+                const cv = new DataView(central.buffer);
+                cv.setUint32(0, 0x02014b50, true);
+                cv.setUint16(4, 20, true);
+                cv.setUint16(6, 20, true);
+                cv.setUint16(8, 0x0800, true);
+                cv.setUint32(16, crc, true);
+                cv.setUint32(20, bytes.length, true);
+                cv.setUint32(24, bytes.length, true);
+                cv.setUint16(28, name.length, true);
+                cv.setUint32(42, offset, true);
+                central.set(name, 46);
+                centralParts.push(central);
+                offset += local.length + bytes.length;
+            }
+            const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+            const end = new Uint8Array(22);
+            const ev = new DataView(end.buffer);
+            ev.setUint32(0, 0x06054b50, true);
+            ev.setUint16(8, entries.length, true);
+            ev.setUint16(10, entries.length, true);
+            ev.setUint32(12, centralSize, true);
+            ev.setUint32(16, offset, true);
+            return new Blob([...localParts, ...centralParts, end], { type: 'application/zip' });
+        }
+
+        async function exportAllSlots() {
+            if (!hasTrack.value || exporting.value) return;
+            error.value = '';
+            exporting.value = true;
+            exportProgress.value = 0;
+            const requestId = ++exportRequestId;
+            const controller = new AbortController();
+            exportController = controller;
+            const sourceUrl = activeSourceUrl.value;
+            const mode = sliceMode.value;
+            const selectedDirection = direction.value;
+            const exportRate = Math.max(0.01, effectiveRate.value);
+            const bpm = effectiveBpm.value;
+            const pitch = pitchSemitones.value;
+            const length = loopLength.value;
+            const duration = activeDuration.value;
+            const bounds = mode === 'transient'
+                ? slices.value.map((slice) => ({ start: slice.start, end: slice.end }))
+                : Array.from({ length: 10 }, (_, index) => {
+                    const from = duration * index / 10;
+                    return { start: from, end: Math.min(duration, from + length) };
+                });
+            if (bounds.length !== 10 || bounds.some((b) => b.end <= b.start)) {
+                error.value = 'Unable to export: all 10 slots must have a valid duration.';
+                exporting.value = false;
+                exportController = null;
+                return;
+            }
+            const safeName = (props.trackName || 'track').replace(/[^a-z0-9-_ ]/gi, '').trim().replace(/\s+/g, '-').toLowerCase() || 'track';
+            const stem = props.stemName ? `-${props.stemName.toLowerCase().replace(/[^a-z0-9-]/g, '')}` : '';
+            const rateSuffix = bpm == null ? '' : `-${bpm}bpm`;
+            const pitchSuffix = pitch === 0 ? '' : `-${pitch > 0 ? 'plus' : 'minus'}${Math.abs(pitch)}st`;
+            const directionSuffix = selectedDirection === 'forward' ? '' : `-${selectedDirection}`;
+            const baseName = `${safeName}${stem}-${mode}${directionSuffix}${rateSuffix}${pitchSuffix}`;
+            let context = null;
+            try {
+                const decoded = await decodeAudio(sourceUrl, controller.signal);
+                if (controller.signal.aborted || requestId !== exportRequestId) return;
+                const Context = window.AudioContext || window.webkitAudioContext;
+                if (!Context) throw new Error('Web Audio API unavailable.');
+                context = new Context();
+                const entries = [];
+                for (let index = 0; index < 10; index++) {
+                    if (controller.signal.aborted || requestId !== exportRequestId) return;
+                    const boundsForSlot = bounds[index];
+                    const loop = createLoopBuffer(context, decoded, boundsForSlot.start, boundsForSlot.end, selectedDirection);
+                    const adjusted = applyExportPlaybackRate(context, loop, exportRate);
+                    const processed = await renderExportEffects(adjusted);
+                    const wav = encodeWav(processed);
+                    entries.push({
+                        name: `${baseName}-slot-${String(index + 1).padStart(2, '0')}.wav`,
+                        bytes: new Uint8Array(await wav.arrayBuffer()),
+                    });
+                    exportProgress.value = index + 1;
+                    // Allow Vue to paint progress and keep the UI responsive between slots.
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+                if (controller.signal.aborted || requestId !== exportRequestId) return;
+                const url = URL.createObjectURL(zipArchive(entries));
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${baseName}-10-slots.zip`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('All slots export:', err);
+                    error.value = 'Unable to export all slots. Check audio access, memory and CORS.';
+                }
+            } finally {
+                if (context) await context.close().catch(() => {});
+                if (exportController === controller) exportController = null;
+                if (requestId === exportRequestId) exporting.value = false;
+            }
+        }
+
         async function exportLoop() {
             if (
                 !hasTrack.value ||
@@ -2098,6 +2246,8 @@ value.charCodeAt(index)
             loopEnabled,
             preparing,
             exporting,
+            exportProgress,
+            exportAllSlots,
             error,
             waveform,
             waveformRef,
