@@ -377,7 +377,7 @@ export default {
     top: 24px;
     left: 24px;
     z-index: 100;
-    width: min(380px, calc(100vw - 48px));
+    width: min(350px, calc(100vw - 8vh));
     color: #fff;
     font-family: inherit;
     pointer-events: none;
@@ -503,19 +503,21 @@ export default {
 }
 
 .ask-gpgc-submit {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    width: 100%;
-    padding: 13px 14px;
+    gap: 16px;
+    width: fit-content;
+    margin-top: 10px;
+    padding: 6px 10px;
     border: 1px solid #fff;
     border-radius: 0;
     background: #fff;
     color: #000;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: -0.2px;
+    letter-spacing: 0;
     cursor: pointer;
 }
 
@@ -606,6 +608,7 @@ export default {
     margin-top: 5px;
     color: #aaa;
     font-size: 12px;
+    letter-spacing: 0;
 }
 
 .ask-gpgc-result-reason {
@@ -613,6 +616,7 @@ export default {
     color: #ccc;
     font-size: 12px;
     line-height: 1.5;
+    letter-spacing: 0;
 }
 
 .ask-gpgc-result-year {
@@ -655,7 +659,7 @@ export default {
     .ask-gpgc {
         top: calc(16px + env(safe-area-inset-top, 0px));
         left: 16px;
-        width: min(340px, calc(100vw - 64px));
+        width: min(350px, calc(100vw - 8vh));
     }
 
     .ask-gpgc-toggle {
