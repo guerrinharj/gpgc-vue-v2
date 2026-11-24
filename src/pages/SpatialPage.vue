@@ -1,6 +1,8 @@
 
 <template>
     <main class="spatial-page" :aria-label="sectionLabel">
+        <AskGPGC />
+
         <section
             ref="scene"
             class="spatial-scene"
@@ -137,6 +139,7 @@ import {
 } from 'vuex';
 
 import EntryModal from '@/components/EntryModal.vue';
+import AskGPGC from '@/components/AskGPGC.vue';
 
 const ABOUT_PARAGRAPHS = [
     {
@@ -274,6 +277,7 @@ export default {
 
     components: {
         EntryModal,
+        AskGPGC,
     },
 
     props: {
@@ -1216,7 +1220,6 @@ export default {
 .spatial-empty p {
     margin-bottom: 12px;
 }
-
 
 /* MOBILE */
 
