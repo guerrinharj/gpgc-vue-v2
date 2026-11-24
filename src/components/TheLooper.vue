@@ -37,33 +37,8 @@
                 <button type="button" :class="{ active: sliceMode === 'transient' }" :aria-pressed="sliceMode === 'transient'" @click="setSliceMode('transient')">TRANSIENT</button>
             </div>
             <div v-if="sliceMode === 'transient'" class="transient-controls">
-                <label for="transient-sensitivity" class="transient-sensitivity-heading">
-                    <span>SENSITIVITY</span>
-                    <strong>{{ transientSensitivity }}%</strong>
-                </label>
-                <input
-                    id="transient-sensitivity"
-                    v-model.number="transientSensitivity"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    :disabled="!hasTrack || !transientReady"
-                    :style="rangeStyle(transientSensitivity, 0, 100)"
-                    aria-label="Transient detection sensitivity"
-                />
-                <p class="transient-hint">{{ transientReady ? 'TEN SLICES FROM THE A / B SELECTION. RETURN TO TIME TO CHANGE THE CROP.' : 'ANALYZING AUDIO FOR TRANSIENTS…' }}</p>
-                <div v-if="slices.length" class="slice-list" aria-label="Detected slices">
-                    <button
-                        v-for="(slice, index) in slices"
-                        :key="`${slice.start}-${index}`"
-                        type="button"
-                        :class="{ active: selectedSliceIndex === index }"
-                        :aria-pressed="selectedSliceIndex === index"
-                        :title="`${formatPreciseTime(slice.start)} – ${formatPreciseTime(slice.end)}`"
-                        @click="selectSlice(index)"
-                    >{{ index === 9 ? '0' : index + 1 }}</button>
-                </div>
+                <p class="transient-hint">CLICK A SLICE TO SELECT IT. DRAG A NUMBERED MARKER TO MOVE ITS CUT.</p>
+                <button type="button" class="reset-markers" :disabled="!transientReady" @click="rebuildSlices">RESET MARKERS</button>
             </div>
         </div>
         <div class="waveform-zoom">
@@ -93,6 +68,7 @@
             @pointermove="onPointerMove"
             @pointerup="onPointerUp"
             @pointercancel="onPointerUp"
+            @lostpointercapture="onWaveformLostCapture"
         >
             <div
                 v-for="(height, index) in visibleWaveform"
@@ -107,11 +83,22 @@
             ></div>
             <template v-if="sliceMode === 'transient'">
                 <div
-                    v-for="(marker, index) in visibleSliceMarkers"
-                    :key="`slice-marker-${index}`"
+                    v-for="marker in visibleSliceMarkers"
+                    :key="`slice-marker-${marker.index}`"
                     class="slice-marker"
                     :style="{ left: `${marker.percent}%` }"
-                ></div>
+                    :class="{ dragging: draggedMarkerIndex === marker.index, active: selectedSliceIndex === marker.index + 1 }"
+                    role="slider"
+                    tabindex="0"
+                    :aria-label="`Slice boundary ${marker.index + 1}`"
+                    :aria-valuenow="Number(marker.time.toFixed(3))"
+                    :aria-valuemin="sampleStart"
+                    :aria-valuemax="sampleEnd"
+                    @pointerdown.stop="onMarkerPointerDown($event, marker.index)"
+                    @keydown.stop="onMarkerKeyDown($event, marker.index)"
+                ><span class="slice-marker-label">{{ (marker.index + 2) % 10 }}</span></div>
+                <div v-if="sampleStart >= viewStart && sampleStart <= viewStart + visibleDuration" class="slice-marker fixed" :style="{ left: `${(sampleStart - viewStart) / visibleDuration * 100}%` }"><span class="slice-marker-label">1</span></div>
+                <div v-if="sampleEnd >= viewStart && sampleEnd <= viewStart + visibleDuration" class="slice-marker fixed" :style="{ left: `${(sampleEnd - viewStart) / visibleDuration * 100}%` }"></div>
             </template>
             <div
                 class="playhead"
@@ -145,6 +132,35 @@
             <p class="keyboard-description">
                 {{ sliceMode === 'transient' ? '1–9 / 0 — Select slices 1–10.' : '1–9 / 0 — Move loop start in 10% increments.' }}
             </p>
+            <div class="direction-section">
+                <div class="direction-header">
+                    <span>PLAYBACK DIRECTION</span>
+                    <span>{{ direction.toUpperCase() }}</span>
+                </div>
+                <div
+                    class="direction-controls"
+                    role="group"
+                    aria-label="Playback direction"
+                >
+                    <button
+                        v-for="option in directions"
+                        :key="option.value"
+                        type="button"
+                        :disabled="!hasTrack"
+                        :class="{ active: direction === option.value }"
+                        :aria-pressed="direction === option.value"
+                        @click="setDirection(option.value)"
+                    >
+                        <span class="direction-icon">
+                            {{ option.icon }}
+                        </span>
+                        <span>{{ option.label }}</span>
+                    </button>
+                </div>
+                <p class="direction-description">
+                    {{ directionDescription }}
+                </p>
+            </div>
             <div class="pitch-header">
                 <span>PITCH / SPEED</span>
                 <strong>{{ formattedPitch }}</strong>
@@ -403,35 +419,6 @@
                 Changes are applied to playback and WAV export.
             </p>
         </div>
-        <div class="direction-section">
-            <div class="direction-header">
-                <span>PLAYBACK DIRECTION</span>
-                <span>{{ direction.toUpperCase() }}</span>
-            </div>
-            <div
-                class="direction-controls"
-                role="group"
-                aria-label="Playback direction"
-            >
-                <button
-                    v-for="option in directions"
-                    :key="option.value"
-                    type="button"
-                    :disabled="!hasTrack"
-                    :class="{ active: direction === option.value }"
-                    :aria-pressed="direction === option.value"
-                    @click="setDirection(option.value)"
-                >
-                    <span class="direction-icon">
-                        {{ option.icon }}
-                    </span>
-                    <span>{{ option.label }}</span>
-                </button>
-            </div>
-            <p class="direction-description">
-                {{ directionDescription }}
-            </p>
-        </div>
         <p class="export-info">
             WAV EXPORT · {{ Math.round(effectiveRate * 100) }}% SPEED ·
             {{ effectiveBpm ? `${effectiveBpm} BPM` : 'BPM UNAVAILABLE' }}
@@ -565,16 +552,17 @@ export default {
             }).join(' ');
         });
         const sliceMode = ref('time');
-        const transientSensitivity = ref(50);
         const transientReady = ref(false);
-        const transientCandidates = ref([]);
         const slices = ref([]);
         const selectedSliceIndex = ref(-1);
         const sampleStart = ref(0);
         const sampleEnd = ref(0);
+        const draggedMarkerIndex = ref(-1);
         const visibleSliceMarkers = computed(() => {
             if (sliceMode.value !== 'transient' || !visibleDuration.value) return [];
-            return slices.value.slice(1).map((slice) => ({
+            return slices.value.slice(1).map((slice, i) => ({
+                index: i,
+                time: slice.start,
                 percent: (slice.start - viewStart.value) / visibleDuration.value * 100,
             })).filter((marker) => marker.percent >= 0 && marker.percent <= 100);
         });
@@ -666,6 +654,7 @@ export default {
         let animationFrame = null;
         let activePointer = null;
         let activeHandle = null;
+        let markerPointer = null;
         let playbackController = null;
         let exportController = null;
         let playbackRequestId = 0;
@@ -819,53 +808,6 @@ export default {
             const seconds = (value % 60).toFixed(2);
             return `${minutes}:${seconds.padStart(5, '0')}`;
         }
-        function analyzeTransients(decoded) {
-            // Short-time RMS increases emphasize attacks while avoiding full-resolution FFT work.
-            const sampleRate = decoded.sampleRate;
-            const hop = Math.max(128, Math.round(sampleRate * 0.01));
-            const frameSize = Math.max(hop * 2, Math.round(sampleRate * 0.025));
-            const frameCount = Math.max(1, Math.floor((decoded.length - frameSize) / hop) + 1);
-            const energies = new Float32Array(frameCount);
-            const channels = Math.min(decoded.numberOfChannels, 2);
-            const channelData = Array.from({ length: channels }, (_, i) => decoded.getChannelData(i));
-            const stride = Math.max(1, Math.floor(frameSize / 256));
-            for (let frame = 0; frame < frameCount; frame++) {
-                const from = frame * hop;
-                let energy = 0;
-                let samples = 0;
-                for (let i = 0; i < frameSize; i += stride) {
-                    for (let channel = 0; channel < channels; channel++) {
-                        const value = channelData[channel][from + i] || 0;
-                        energy += value * value;
-                        samples++;
-                    }
-                }
-                energies[frame] = Math.sqrt(energy / Math.max(1, samples));
-            }
-            const novelty = new Float32Array(frameCount);
-            const positive = [];
-            for (let frame = 2; frame < frameCount - 2; frame++) {
-                const baseline = (energies[frame - 1] + energies[frame - 2]) * 0.5;
-                const value = Math.max(0, energies[frame] - baseline);
-                novelty[frame] = value;
-                if (value > 0) positive.push(value);
-            }
-            positive.sort((a, b) => a - b);
-            const percentile = (fraction) => positive[Math.min(positive.length - 1, Math.floor(fraction * (positive.length - 1)))] || 0;
-            const reference = percentile(0.95);
-            const floor = Math.max(0.0001, percentile(0.5) * 1.5);
-            const candidates = [];
-            for (let frame = 3; frame < frameCount - 3; frame++) {
-                const strength = novelty[frame];
-                if (strength < floor || strength < novelty[frame - 1] || strength <= novelty[frame + 1]) continue;
-                const time = Math.max(0, (frame * hop - frameSize * 0.25) / sampleRate);
-                if (time < 0.035 || time > decoded.duration - 0.035) continue;
-                candidates.push({ time, strength: reference > 0 ? strength / reference : 0 });
-            }
-            transientCandidates.value = candidates;
-            transientReady.value = true;
-            rebuildSlices();
-        }
         function rebuildSlices() {
             if (!transientReady.value || !activeDuration.value) {
                 slices.value = [];
@@ -877,38 +819,57 @@ export default {
             const to = Math.max(from, Math.min(sampleEnd.value, activeDuration.value));
             const length = to - from;
             if (length <= 0) return;
-            const threshold = 1.6 - transientSensitivity.value / 100 * 1.5;
-            const candidates = transientCandidates.value.filter((candidate) =>
-                candidate.time > from && candidate.time < to && candidate.strength >= threshold
+            const boundaries = Array.from({ length: 11 }, (_, index) =>
+                from + length * index / 10
             );
-            const boundaries = [from];
-            // Ten pads means nine internal boundaries. Search around each evenly
-            // spaced target for the strongest nearby onset; otherwise use the target.
-            for (let index = 1; index < 10; index++) {
-                const target = from + length * index / 10;
-                const previous = boundaries[boundaries.length - 1];
-                const remaining = 10 - index;
-                const minimum = Math.max(length / 1000, 0.00001);
-                const lower = previous + minimum;
-                const upper = to - remaining * minimum;
-                const radius = length / 20;
-                const nearby = candidates.filter((candidate) =>
-                    candidate.time >= lower && candidate.time <= upper &&
-                    Math.abs(candidate.time - target) <= radius
-                );
-                nearby.sort((a, b) =>
-                    (b.strength - Math.abs(b.time - target) / Math.max(radius, 0.001)) -
-                    (a.strength - Math.abs(a.time - target) / Math.max(radius, 0.001))
-                );
-                boundaries.push(Math.max(lower, Math.min(upper, nearby[0]?.time ?? target)));
-            }
-            boundaries.push(to);
             slices.value = Array.from({ length: 10 }, (_, index) => ({
                 start: boundaries[index],
                 end: boundaries[index + 1],
             }));
             if (sliceMode.value === 'transient') {
                 selectSlice(Math.max(0, Math.min(9, selectedSliceIndex.value)));
+            }
+        }
+        function updateSliceBoundary(index, time) {
+            if (sliceMode.value !== 'transient' || index < 0 || index >= slices.value.length - 1) return;
+            const left = slices.value[index];
+            const right = slices.value[index + 1];
+            const minimum = Math.max(0.00001, (sampleEnd.value - sampleStart.value) / 10000);
+            const boundary = Math.max(left.start + minimum, Math.min(right.end - minimum, time));
+            if (!Number.isFinite(boundary)) return;
+            slices.value = slices.value.map((slice, i) => {
+                if (i === index) return { ...slice, end: boundary };
+                if (i === index + 1) return { ...slice, start: boundary };
+                return slice;
+            });
+            if (selectedSliceIndex.value === index || selectedSliceIndex.value === index + 1) {
+                const selected = slices.value[selectedSliceIndex.value];
+                start.value = selected.start;
+                end.value = selected.end;
+            }
+        }
+        function onMarkerPointerDown(event, index) {
+            if (!hasTrack.value || !transientReady.value) return;
+            event.preventDefault();
+            markerPointer = event.pointerId;
+            draggedMarkerIndex.value = index;
+            selectSlice(index + 1);
+            waveformRef.value?.setPointerCapture(event.pointerId);
+        }
+        function onMarkerKeyDown(event, index) {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            const step = (event.shiftKey ? 0.01 : 0.001) * (event.key === 'ArrowRight' ? 1 : -1);
+            updateSliceBoundary(index, slices.value[index].end + step);
+        }
+        function onWaveformLostCapture(event) {
+            if (event.pointerId === markerPointer) {
+                markerPointer = null;
+                draggedMarkerIndex.value = -1;
+            }
+            if (event.pointerId === activePointer) {
+                activePointer = null;
+                activeHandle = null;
             }
         }
         function selectSlice(index) {
@@ -926,11 +887,8 @@ export default {
                 sampleStart.value = start.value;
                 sampleEnd.value = end.value;
                 sliceMode.value = mode;
-                if (transientReady.value) {
-                    rebuildSlices();
-                } else if (decodedCache && decodedCacheUrl === activeSourceUrl.value) {
-                    analyzeTransients(decodedCache);
-                }
+                transientReady.value = activeDuration.value > 0;
+                rebuildSlices();
             } else {
                 sliceMode.value = mode;
                 selectedSliceIndex.value = -1;
@@ -1003,7 +961,7 @@ Number(end.value) || maximum,
             if (sliceMode.value === 'transient') {
                 const index = slices.value.findIndex((slice, i) =>
                     position >= slice.start &&
-                    (position < slice.end || i === slices.value.length - 1)
+                    (position < slice.end || (i === slices.value.length - 1 && position <= slice.end))
                 );
                 if (index !== -1) selectSlice(index);
                 return;
@@ -1020,11 +978,23 @@ Number(end.value) || maximum,
             updatePointer(event);
         }
         function onPointerMove(event) {
+            if (markerPointer === event.pointerId) {
+                updateSliceBoundary(draggedMarkerIndex.value, getPointerPosition(event));
+                return;
+            }
             if (activePointer === event.pointerId) {
                 updatePointer(event);
             }
         }
         function onPointerUp(event) {
+            if (markerPointer === event.pointerId) {
+                if (waveformRef.value?.hasPointerCapture(event.pointerId)) {
+                    waveformRef.value.releasePointerCapture(event.pointerId);
+                }
+                markerPointer = null;
+                draggedMarkerIndex.value = -1;
+                return;
+            }
             if (activePointer !== event.pointerId) {
                 return;
             }
@@ -1317,7 +1287,12 @@ offset,
                         peaks.push(Math.max(3, peak * 100));
                     }
                     waveform.value = peaks;
-                    analyzeTransients(decoded);
+                    if (sliceMode.value === 'transient' && !transientReady.value) {
+                        sampleStart.value = 0;
+                        sampleEnd.value = decoded.duration;
+                        transientReady.value = true;
+                        rebuildSlices();
+                    }
                 }
                 return decoded;
             } finally {
@@ -1987,7 +1962,6 @@ value.charCodeAt(index)
                 decodedCache = null;
                 decodedCacheUrl = '';
                 transientReady.value = false;
-                transientCandidates.value = [];
                 slices.value = [];
                 selectedSliceIndex.value = -1;
                 sampleStart.value = 0;
@@ -2000,7 +1974,7 @@ value.charCodeAt(index)
                     const controller = new AbortController();
                     void decodeAudio(activeSourceUrl.value, controller.signal).then((buffer) => {
                         if (activeSourceUrl.value !== decodedCacheUrl) return;
-                        end.value = buffer.duration;
+                        if (sliceMode.value === 'time') end.value = buffer.duration;
                     }).catch(() => {});
                 }
             },
@@ -2009,7 +1983,7 @@ value.charCodeAt(index)
         watch(
             () => activeDuration.value,
             (value) => {
-                if (!loopEnabled.value) {
+                if (!loopEnabled.value && sliceMode.value === 'time') {
                     start.value = 0;
                     end.value = Number.isFinite(value)
                         ? value
@@ -2025,7 +1999,6 @@ value.charCodeAt(index)
             },
             { immediate: true }
         );
-        watch(transientSensitivity, rebuildSlices);
         watch([start, end], () => {
             if (!loopEnabled.value || preparing.value) {
                 return;
@@ -2082,11 +2055,17 @@ value.charCodeAt(index)
         });
         return {
             sliceMode,
-            transientSensitivity,
             transientReady,
             slices,
             selectedSliceIndex,
             visibleSliceMarkers,
+            draggedMarkerIndex,
+            sampleStart,
+            sampleEnd,
+            rebuildSlices,
+            onMarkerPointerDown,
+            onMarkerKeyDown,
+            onWaveformLostCapture,
             selectSlice,
             setSliceMode,
             filterResponsePath,
@@ -2165,7 +2144,7 @@ value.charCodeAt(index)
     margin-top: 18px;
     padding-top: 15px;
 }
-.slice-mode-header, .transient-sensitivity-heading {
+.slice-mode-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2174,7 +2153,7 @@ value.charCodeAt(index)
     font-size: 10px;
     letter-spacing: 0.4px;
 }
-.slice-mode-header span:last-child, .transient-sensitivity-heading strong { color: #fff; font-weight: 400; }
+.slice-mode-header span:last-child { color: #fff; font-weight: 400; }
 .slice-mode-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
 .slice-mode-buttons button, .slice-list button {
     background: #000;
@@ -2188,25 +2167,17 @@ value.charCodeAt(index)
 .slice-mode-buttons button.active, .slice-list button.active,
 .slice-mode-buttons button:hover, .slice-list button:hover { background: #fff; color: #000; border-color: #fff; }
 .transient-controls { margin-top: 16px; }
-.transient-controls input[type="range"] {
-    width: 100%; height: 18px; margin: 12px 0 0;
-    appearance: none; -webkit-appearance: none; background: transparent;
-}
-.transient-controls input[type="range"]::-webkit-slider-runnable-track {
-    height: 3px;
-    background: linear-gradient(to right, #fff var(--range-progress), #555 var(--range-progress));
-}
-.transient-controls input[type="range"]::-moz-range-track { height: 3px; background: #555; }
-.transient-controls input[type="range"]::-moz-range-progress { height: 3px; background: #fff; }
-.transient-controls input[type="range"]::-webkit-slider-thumb {
-    width: 11px; height: 16px; margin-top: -6.5px;
-    appearance: none; -webkit-appearance: none; background: #fff; border: 1px solid #fff;
-}
-.transient-controls input[type="range"]::-moz-range-thumb { width: 11px; height: 16px; background: #fff; border: 1px solid #fff; border-radius: 0; }
-.transient-controls input[type="range"]:disabled { opacity: 0.4; }
 .transient-hint { color: #777; font-size: 10px; margin: 9px 0 0; line-height: 1.5; }
 .slice-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; margin-top: 12px; max-height: 140px; overflow-y: auto; }
-.slice-marker { position: absolute; top: 0; bottom: 0; width: 1px; background: #aaa; opacity: 0.9; pointer-events: none; }
+.slice-marker { position: absolute; top: 0; bottom: 0; width: 2px; background: #aaa; opacity: 0.95; cursor: ew-resize; pointer-events: auto; touch-action: none; z-index: 5; }
+.slice-marker::before { content: ''; position: absolute; top: 0; bottom: 0; left: -9px; width: 20px; }
+.slice-marker-label { position: absolute; top: 0; left: 0; min-width: 16px; height: 18px; display: grid; place-items: center; background: #aaa; color: #000; font-size: 10px; font-weight: 700; }
+.slice-marker.active .slice-marker-label, .slice-marker.dragging .slice-marker-label, .slice-marker:hover .slice-marker-label { background: #fff; }
+.slice-marker.fixed { pointer-events: none; cursor: default; }
+.slice-marker:hover, .slice-marker.dragging, .slice-marker:focus-visible { background: #fff; outline: none; z-index: 6; }
+.reset-markers { display: block; margin-top: 12px; padding: 8px 10px; width: 100%; border: 1px solid #555; background: #000; color: #fff; font: inherit; font-size: 10px; cursor: pointer; }
+.reset-markers:hover:not(:disabled) { background: #fff; color: #000; }
+.reset-markers:disabled { opacity: 0.4; cursor: default; }
 .looper-header {
     display: flex;
     align-items: center;
