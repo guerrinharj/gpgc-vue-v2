@@ -76,21 +76,20 @@ export default {
     text-decoration: underline;
 }
 
-/* MOBILE */
 @media (max-width: 768px) {
     .spatial-nav {
-        right: 20px;
-        bottom: 24px;
+        right: 12px;
+        bottom: 14px;
     }
 
     .spatial-nav ul {
-        gap: 7px;
+        gap: 3px;
     }
 
     .spatial-nav a {
-        font-size: 20px;
+        font-size: 14px !important;
         font-weight: 600;
-        letter-spacing: -1.4px;
+        letter-spacing: -0.7px;
         line-height: 1;
     }
 }

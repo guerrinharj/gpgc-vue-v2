@@ -1,9 +1,9 @@
 <template>
-    <aside class="audio-player" :class="{ expanded: showAudioTools }" aria-label="Audio player">
+    <aside class="audio-player" :class="{ expanded: showAudioTools, 'mobile-expanded': mobileExpanded }" aria-label="Audio player">
         <audio
-ref="audioRef"
-crossorigin="anonymous"
-preload="metadata"
+            ref="audioRef"
+            crossorigin="anonymous"
+            preload="metadata"
             @loadedmetadata="onMetadata"
             @timeupdate="onTime"
             @ended="onEnded"
@@ -11,6 +11,28 @@ preload="metadata"
             @pause="onAudioPause"
             @error="onAudioError"
         ></audio>
+        <div class="mobile-mini-player">
+            <button
+                type="button"
+                class="mini-play"
+                :aria-label="playing ? 'Pause' : 'Play'"
+                :disabled="!currentTrack"
+                @click="toggle"
+            >{{ playing ? 'Ⅱ' : '▶' }}</button>
+            <button
+                type="button"
+                class="mini-track"
+                :aria-expanded="mobileExpanded"
+                @click="toggleMobilePlayer"
+            >{{ currentTrack?.name || 'Select a release' }}</button>
+            <button
+                type="button"
+                class="mini-expand"
+                :aria-label="mobileExpanded ? 'Collapse player' : 'Expand player'"
+                :aria-expanded="mobileExpanded"
+                @click="toggleMobilePlayer"
+            >{{ mobileExpanded ? '⌄' : '⌃' }}</button>
+        </div>
         <div class="player-line">
             <div class="current-track">
                 <router-link
@@ -27,69 +49,69 @@ preload="metadata"
             </div>
             <div class="transport">
                 <button
-type="button"
-aria-label="Previous track"
+                    type="button"
+                    aria-label="Previous track"
                     :disabled="!currentTrack"
                     @click="previous"
                 >←</button>
                 <button
-type="button"
+                    type="button"
                     :aria-label="playing ? 'Pause' : 'Play'"
                     :disabled="!currentTrack"
                     @click="toggle"
                 >{{ playing ? 'Ⅱ' : '▶' }}</button>
                 <button
-type="button"
-aria-label="Next track"
+                    type="button"
+                    aria-label="Next track"
                     :disabled="!currentTrack"
                     @click="next"
                 >→</button>
                 <button
-type="button"
-class="shuffle-button"
+                    type="button"
+                    class="shuffle-button"
                     :class="{ active: radioMode }"
                     :aria-pressed="radioMode"
                     :disabled="shuffleLoading"
                     :title="radioMode ? 'Restart shuffle' : 'Shuffle tracks from 2018 onward'"
-aria-label="Shuffle tracks from 2018 onward"
+                    aria-label="Shuffle tracks from 2018 onward"
                     @click="startShuffle"
                 >⤨</button>
             </div>
         </div>
         <p
             v-if="shuffleLoading"
-class="shuffle-status"
-role="status"
+            class="shuffle-status"
+            role="status"
         >
             Loading shuffle…
         </p>
         <p
             v-if="shuffleError"
-class="player-error"
-role="status"
+            class="player-error"
+            role="status"
         >
             {{ shuffleError }}
         </p>
         <div class="seek-line">
             <span>{{ formatTime(currentTime) }}</span>
             <input
-type="range"
-min="0"
-max="1000"
+                type="range"
+                min="0"
+                max="1000"
                 :value="progress"
                 :disabled="!duration"
                 :style="rangeStyle(progress, 0, 1000)"
-aria-label="Track position"
+                aria-label="Track position"
                 @input="seek"
             />
             <span>{{ formatTime(duration) }}</span>
         </div>
         <div class="tools-bar">
             <button
-type="button"
-class="tools-toggle"
+                type="button"
+                class="tools-toggle"
                 :aria-expanded="showAudioTools"
-aria-controls="audio-tools-panel"
+                aria-controls="audio-tools-panel"
                 @click="toggleAudioTools"
             >
                 <span class="tools-icon">☷</span>
@@ -101,46 +123,46 @@ aria-controls="audio-tools-panel"
             <label for="player-volume" class="volume-label">
                 <span>Volume</span>
                 <input
-id="player-volume"
-v-model.number="volume"
-type="range"
-min="0"
-max="100"
+                    id="player-volume"
+                    v-model.number="volume"
+                    type="range"
+                    min="0"
+                    max="100"
                     :style="rangeStyle(volume, 0, 100)"
                     @input="updateVolume"
                 />
             </label>
         </div>
         <div
-v-show="showAudioTools"
-id="audio-tools-panel"
-class="audio-tools-panel"
+            v-show="showAudioTools"
+            id="audio-tools-panel"
+            class="audio-tools-panel"
         >
             <div class="tools-panel-heading">
                 <span>AUDIO TOOLS</span>
                 <button type="button" @click="toggleAudioTools">CLOSE AUDIO TOOLS ×</button>
             </div>
             <div
-class="tool-tabs"
-role="group"
-aria-label="Audio tools"
+                class="tool-tabs"
+                role="group"
+                aria-label="Audio tools"
             >
                 <button
-type="button"
-class="tool-tab"
+                    type="button"
+                    class="tool-tab"
                     :class="{ active: activeTool === 'sound' }"
                     :aria-pressed="activeTool === 'sound'"
-aria-controls="player-effects"
+                    aria-controls="player-effects"
                     @click="toggleTool('sound')"
                 >
                     <svg
-viewBox="0 0 24 24"
-fill="none"
-stroke="currentColor"
-stroke-width="1.6"
-stroke-linecap="round"
-stroke-linejoin="round"
-aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
                     >
                         <line x1="4" y1="7" x2="20" y2="7" />
                         <line x1="4" y1="17" x2="20" y2="17" />
@@ -150,20 +172,20 @@ aria-hidden="true"
                     <span>Sound</span>
                 </button>
                 <button
-type="button"
-class="tool-tab"
+                    type="button"
+                    class="tool-tab"
                     :class="{ active: activeTool === 'stems' }"
                     :aria-pressed="activeTool === 'stems'"
-aria-controls="player-stems"
+                    aria-controls="player-stems"
                     @click="toggleTool('stems')"
                 >
                     <svg
-viewBox="0 0 24 24"
-fill="none"
-stroke="currentColor"
-stroke-width="1.6"
-stroke-linecap="round"
-aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        aria-hidden="true"
                     >
                         <line x1="4" y1="10" x2="4" y2="14" />
                         <line x1="8" y1="5" x2="8" y2="19" />
@@ -174,21 +196,21 @@ aria-hidden="true"
                     <span>Stems</span>
                 </button>
                 <button
-type="button"
-class="tool-tab"
+                    type="button"
+                    class="tool-tab"
                     :class="{ active: activeTool === 'looper' }"
                     :aria-pressed="activeTool === 'looper'"
-aria-controls="player-looper"
+                    aria-controls="player-looper"
                     @click="toggleTool('looper')"
                 >
                     <svg
-viewBox="0 0 24 24"
-fill="none"
-stroke="currentColor"
-stroke-width="1.6"
-stroke-linecap="round"
-stroke-linejoin="round"
-aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
                     >
                         <path d="M17 2l4 4-4 4" />
                         <path d="M3 11V9a3 3 0 0 1 3-3h15" />
@@ -198,11 +220,11 @@ aria-hidden="true"
                     <span>Looper</span>
                 </button>
                 <button
-type="button"
-class="tool-tab"
+                    type="button"
+                    class="tool-tab"
                     :class="{ active: activeTool === 'recorder' }"
                     :aria-pressed="activeTool === 'recorder'"
-aria-controls="player-recorder"
+                    aria-controls="player-recorder"
                     @click="toggleTool('recorder')"
                 >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
@@ -213,15 +235,15 @@ aria-controls="player-recorder"
                 </button>
             </div>
             <div
-v-show="activeTool === 'sound'"
-id="player-effects"
-class="tool-content"
+                v-show="activeTool === 'sound'"
+                id="player-effects"
+                class="tool-content"
             >
                 <div class="tool-heading">
                     <strong>Sound Settings</strong>
                     <button
-type="button"
-class="heading-action"
+                        type="button"
+                        class="heading-action"
                         @click="resetEffects"
                     >
                         Reset
@@ -234,10 +256,10 @@ class="heading-action"
                             <output>{{ bass }} dB</output>
                         </span>
                         <input
-v-model.number="bass"
-type="range"
-min="-12"
-max="12"
+                            v-model.number="bass"
+                            type="range"
+                            min="-12"
+                            max="12"
                             :style="rangeStyle(bass, -12, 12)"
                             @input="updateEffects"
                         />
@@ -248,10 +270,10 @@ max="12"
                             <output>{{ treble }} dB</output>
                         </span>
                         <input
-v-model.number="treble"
-type="range"
-min="-12"
-max="12"
+                            v-model.number="treble"
+                            type="range"
+                            min="-12"
+                            max="12"
                             :style="rangeStyle(treble, -12, 12)"
                             @input="updateEffects"
                         />
@@ -270,10 +292,10 @@ max="12"
                             </output>
                         </span>
                         <input
-v-model.number="pan"
-type="range"
-min="-100"
-max="100"
+                            v-model.number="pan"
+                            type="range"
+                            min="-100"
+                            max="100"
                             :style="rangeStyle(pan, -100, 100)"
                             @input="updateEffects"
                         />
@@ -288,7 +310,7 @@ max="100"
                     </div>
                     <div class="mode-switch">
                         <button
-type="button"
+                            type="button"
                             :class="{ active: !vinylMode }"
                             :aria-pressed="!vinylMode"
                             @click="setVinylMode(false)"
@@ -296,7 +318,7 @@ type="button"
                             Independent
                         </button>
                         <button
-type="button"
+                            type="button"
                             :class="{ active: vinylMode }"
                             :aria-pressed="vinylMode"
                             @click="setVinylMode(true)"
@@ -310,12 +332,12 @@ type="button"
                             <output>{{ playbackRate.toFixed(2) }}×</output>
                         </span>
                         <input
-v-model.number="speed"
-type="range"
-min="50"
-max="150"
-step="1"
-aria-label="Playback speed"
+                            v-model.number="speed"
+                            type="range"
+                            min="50"
+                            max="150"
+                            step="1"
+                            aria-label="Playback speed"
                             :style="rangeStyle(speed, 50, 150)"
                             @input="updateEffects"
                         />
@@ -345,9 +367,9 @@ aria-label="Playback speed"
                 </div>
             </div>
             <div
-v-show="activeTool === 'stems'"
-id="player-stems"
-class="tool-content"
+                v-show="activeTool === 'stems'"
+                id="player-stems"
+                class="tool-content"
             >
                 <div class="tool-heading">
                     <strong>Stem Separation</strong>
@@ -369,12 +391,12 @@ class="tool-content"
                 </p>
             </div>
             <div
-v-show="activeTool === 'looper'"
-id="player-looper"
-class="tool-content looper-content"
+                v-show="activeTool === 'looper'"
+                id="player-looper"
+                class="tool-content looper-content"
             >
                 <TheLooper
-ref="looperRef"
+                    ref="looperRef"
                     :audio-element="audioRef"
                     :source-url="currentTrack?.url || ''"
                     :stem-source-url="selectedLoopStem?.url || ''"
@@ -402,9 +424,9 @@ ref="looperRef"
                 />
             </div>
             <div
-v-show="activeTool === 'recorder'"
-id="player-recorder"
-class="tool-content recorder-content"
+                v-show="activeTool === 'recorder'"
+                id="player-recorder"
+                class="tool-content recorder-content"
             >
                 <ThePerformanceRecorder
                     :audio-context="audioContext"
@@ -416,28 +438,28 @@ class="tool-content recorder-content"
         </div>
         <p
             v-if="audioError"
-class="player-error"
-role="status"
+            class="player-error"
+            role="status"
         >
             {{ audioError }}
         </p>
     </aside>
 </template>
 <script>
-    import {
+import {
     computed,
     nextTick,
     onMounted,
     onBeforeUnmount,
     ref,
     watch,
-    } from 'vue';
-        import { useStore } from 'vuex';
-        import StemSeparator from './StemSeparator.vue';
-        import TheLooper from './TheLooper.vue';
-        import ThePerformanceRecorder from './ThePerformanceRecorder.vue';
-        import { detectBpmFromUrl } from '@/utils/detect-bpm';
-        export default {
+} from 'vue';
+import { useStore } from 'vuex';
+import StemSeparator from './StemSeparator.vue';
+import TheLooper from './TheLooper.vue';
+import ThePerformanceRecorder from './ThePerformanceRecorder.vue';
+import { detectBpmFromUrl } from '@/utils/detect-bpm';
+export default {
     name: 'PlayerBar',
     components: {
         StemSeparator,
@@ -461,6 +483,11 @@ role="status"
         const loopActive = ref(false);
         const loopPlaying = ref(false);
         const showAudioTools = ref(false);
+        const mobileExpanded = ref(false);
+
+        function toggleMobilePlayer() {
+            mobileExpanded.value = !mobileExpanded.value;
+        }
         const activeTool = ref(null);
         const currentTime = ref(0);
         const duration = ref(0);
@@ -987,6 +1014,8 @@ node.Q.setTargetAtTime(settings.q, now, 0.015);
             originalBpm,
             playing,
             showAudioTools,
+            mobileExpanded,
+            toggleMobilePlayer,
             activeTool,
             loopActive,
             toggleAudioTools,
@@ -1061,7 +1090,6 @@ node.Q.setTargetAtTime(settings.q, now, 0.015);
 .audio-player.expanded {
     width: min(50vw, 960px);
 }
-
 .audio-player input[type='range'] {
     appearance: none;
     -webkit-appearance: none;
@@ -1074,14 +1102,12 @@ node.Q.setTargetAtTime(settings.q, now, 0.015);
     cursor: pointer;
     accent-color: #fff;
 }
-
 .audio-player input[type='range']::-webkit-slider-runnable-track {
     height: 2px;
     background: #fff !important;
     border: 0;
     border-radius: 0;
 }
-
 .audio-player input[type='range']::-webkit-slider-thumb {
     appearance: none;
     -webkit-appearance: none;
@@ -1092,19 +1118,16 @@ node.Q.setTargetAtTime(settings.q, now, 0.015);
     border: 0;
     border-radius: 50%;
 }
-
 .audio-player input[type='range']::-moz-range-track {
     height: 2px;
     background: #fff !important;
     border: 0;
     border-radius: 0;
 }
-
 .audio-player input[type='range']::-moz-range-progress {
     height: 2px;
     background: #fff;
 }
-
 .audio-player input[type='range']::-moz-range-thumb {
     width: 10px;
     height: 10px;
@@ -1112,27 +1135,22 @@ node.Q.setTargetAtTime(settings.q, now, 0.015);
     border: 0;
     border-radius: 50%;
 }
-
 .audio-player input[type='range']:disabled {
     opacity: 0.35;
     cursor: default;
 }
-
 .audio-player .seek-line input[type='range'] {
     flex: 1;
     min-width: 0;
 }
-
 .audio-player .volume-label input[type='range'] {
     width: 65px;
 }
-
 @media (max-width: 420px) {
     .audio-player .volume-label input[type='range'] {
         width: 47px;
     }
 }
-
 .player-line {
     display: flex;
     align-items: center;
@@ -1278,8 +1296,8 @@ node.Q.setTargetAtTime(settings.q, now, 0.015);
     letter-spacing: -0.2px;
     cursor: pointer;
     transition:
-background 150ms ease,
-        color 150ms ease;
+    background 150ms ease,
+    color 150ms ease;
 }
 .tool-tab svg {
     width: 19px;
@@ -1414,8 +1432,8 @@ background 150ms ease,
     font-size: 12px;
     text-align: center;
     transition:
-background 180ms ease,
-        color 180ms ease;
+    background 180ms ease,
+    color 180ms ease;
 }
 .mode-switch button + button {
     border-left: 1px solid rgba(255, 255, 255, 0.3);
@@ -1493,33 +1511,33 @@ background 180ms ease,
     color: #aaa;
     margin: 9px 0 0;
 }
-    input[type='range'] {
+input[type='range'] {
     appearance: none;
--webkit-appearance: none;
+    -webkit-appearance: none;
     width: 100%;
     height: 2px;
     padding: 0;
     border: 0;
     border-radius: 0;
     background: linear-gradient(
-        to right,
-        \#fff 0%,
-        \#fff var(--range-progress, 50%),
-        \#444 var(--range-progress, 50%),
-        \#444 100%
+    to right,
+    #fff 0%,
+    #fff var(--range-progress, 50%),
+    #444 var(--range-progress, 50%),
+    #444 100%
     );
     cursor: pointer;
 }
-    input[type='range']::-webkit-slider-runnable-track {
+input[type='range']::-webkit-slider-runnable-track {
     appearance: none;
--webkit-appearance: none;
+    -webkit-appearance: none;
     height: 2px;
     background: transparent;
     border: 0;
 }
-    input[type='range']::-webkit-slider-thumb {
+input[type='range']::-webkit-slider-thumb {
     appearance: none;
--webkit-appearance: none;
+    -webkit-appearance: none;
     width: 10px;
     height: 10px;
     margin-top: -4px;
@@ -1527,123 +1545,194 @@ background 180ms ease,
     border: 0;
     border-radius: 50%;
 }
-    input[type='range']::-moz-range-track {
+input[type='range']::-moz-range-track {
     height: 2px;
     background: #444;
     border: 0;
 }
-    input[type='range']::-moz-range-progress {
+input[type='range']::-moz-range-progress {
     height: 2px;
     background: #fff;
 }
-    input[type='range']::-moz-range-thumb {
+input[type='range']::-moz-range-thumb {
     width: 10px;
     height: 10px;
     background: #fff;
     border: 0;
     border-radius: 50%;
 }
-    input[type='range']:disabled {
+input[type='range']:disabled {
     opacity: 0.35;
     cursor: default;
 }
-    button:focus-visible,
-        input:focus-visible {
+button:focus-visible,
+input:focus-visible {
     outline: 1px solid #fff;
     outline-offset: 4px;
 }
-            @media (max-width: 768px) {
-.audio-player {
+@media (max-width: 768px) {
+    .audio-player {
         left: 20px;
         bottom: 20px;
         width: min(340px, calc(100vw - 165px));
         max-height: 75dvh;
         padding: 13px;
     }
-.current-track {
+    .current-track {
         font-size: 14px;
     }
-.transport {
+    .transport {
         gap: 7px;
     }
-.transport button {
+    .transport button {
         font-size: 15px;
     }
-.tools-bar {
+    .tools-bar {
         flex-wrap: wrap;
         gap: 10px;
     }
-.seek-line {
+    .seek-line {
         font-size: 10px;
     }
-.tool-tab {
+    .tool-tab {
         min-height: 58px;
         font-size: 10px;
     }
-.tool-tab svg {
+    .tool-tab svg {
         width: 17px;
         height: 17px;
     }
-.player-effects {
+    .player-effects {
         gap: 20px 10px;
     }
-.pitch-readout strong {
+    .pitch-readout strong {
         font-size: 17px;
     }
 }
-            @media (max-width: 420px) {
-.audio-player {
+@media (max-width: 420px) {
+    .audio-player {
         left: 12px;
         bottom: 14px;
         width: calc(100vw - 150px);
         padding: 11px;
     }
-.transport {
+    .transport {
         gap: 5px;
     }
-.current-track {
+    .current-track {
         font-size: 12px;
     }
-.transport button {
+    .transport button {
         font-size: 14px;
     }
-.volume-label input {
+    .volume-label input {
         width: 47px;
     }
-.tool-tabs {
+    .tool-tabs {
         gap: 4px;
     }
-.tool-tab {
+    .tool-tab {
         min-height: 52px;
         padding: 8px 2px;
         font-size: 9px;
         gap: 6px;
     }
-.tool-tab svg {
+    .tool-tab svg {
         width: 16px;
         height: 16px;
     }
-.player-effects {
+    .player-effects {
         grid-template-columns: 1fr;
     }
-.mode-switch button {
+    .mode-switch button {
         font-size: 10px;
         padding: 9px 4px;
     }
-.pitch-readout {
+    .pitch-readout {
         gap: 8px;
     }
-.pitch-readout > div {
+    .pitch-readout > div {
         padding: 9px;
     }
-.pitch-readout strong {
+    .pitch-readout strong {
         font-size: 15px;
     }
 }
-            @media (prefers-reduced-motion: reduce) {
-.mode-switch button,
-.tool-tab {
+@media (prefers-reduced-motion: reduce) {
+    .mode-switch button,
+    .tool-tab {
         transition: none;
+    }
+}
+
+.mobile-mini-player {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .audio-player,
+    .audio-player.expanded {
+        left: 10px;
+        bottom: max(12px, env(safe-area-inset-bottom));
+        width: 145px;
+        padding: 4px;
+        max-height: 80dvh;
+    }
+
+    .audio-player.mobile-expanded {
+        width: min(420px, calc(100vw - 20px));
+        padding: 10px;
+    }
+
+    .mobile-mini-player {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        min-height: 28px;
+        position: sticky;
+        top: 0;
+        background: #000;
+        z-index: 2;
+    }
+
+    .mobile-mini-player button {
+        color: #fff;
+        background: transparent;
+        border: 0;
+        padding: 3px;
+        min-height: 28px;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    .mini-play,
+    .mini-expand {
+        flex: 0 0 24px;
+        font-size: 13px;
+        letter-spacing: 0;
+    }
+
+    .mini-play:disabled {
+        opacity: 0.4;
+    }
+
+    .mini-track {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: -0.3px;
+    }
+
+    .audio-player:not(.mobile-expanded) > :not(.mobile-mini-player):not(audio) {
+        display: none;
+    }
+
+    .audio-player.mobile-expanded .player-line {
+        margin-top: 10px;
     }
 }
 </style>
