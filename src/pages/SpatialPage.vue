@@ -1,4 +1,3 @@
-
 <template>
     <main class="spatial-page" :aria-label="sectionLabel">
         <AskGPGC />
@@ -76,7 +75,8 @@
                 aria-label="Older entry"
                 @click="moveSingle(1)"
             >
-                ↑
+                <span class="arrow-desktop">↑</span>
+                <span class="arrow-mobile">→</span>
             </button>
 
             <button
@@ -84,7 +84,8 @@
                 aria-label="Newer entry"
                 @click="moveSingle(-1)"
             >
-                ↓
+                <span class="arrow-desktop">↓</span>
+                <span class="arrow-mobile">←</span>
             </button>
         </div>
 
@@ -1200,6 +1201,10 @@ export default {
     gap: 0.35rem;
 }
 
+.arrow-mobile {
+    display: none;
+}
+
 .spatial-arrows button {
     font-size: 18px;
     font-weight: 400;
@@ -1224,6 +1229,7 @@ export default {
 /* MOBILE */
 
 @media (max-width: 768px) {
+
     .spatial-release {
         top: 44%;
         width: max-content;
@@ -1245,36 +1251,141 @@ export default {
         white-space: normal;
     }
 
+    /* SCROLLBAR */
+
     .spatial-scrollbar {
-        right: 24px;
-        top: calc(32px + env(safe-area-inset-top, 0px));
+        position: absolute;
+        top: calc(24px + env(safe-area-inset-top, 0px));
+        right: 20px;
         bottom: auto;
-        width: 24px;
-        height: 120px;
+        width: 116px;
+        height: 24px;
+        padding: 0;
+        margin: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
     }
 
     .spatial-scroll-range {
-        width: 120px;
-        height: 2px;
-        transform: rotate(90deg);
-        transform-origin: center;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 116px;
+        height: 20px;
+        padding: 0;
+        margin: 0;
+        transform: none;
+        appearance: none;
+        -webkit-appearance: none;
+        background: transparent;
+        border: none;
+        outline: none;
+        box-shadow: none;
+        cursor: ew-resize;
+        touch-action: none;
     }
+
+    .spatial-scroll-range::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 1px;
+        background: #777;
+        border: none;
+    }
+
+    .spatial-scroll-range::-moz-range-track {
+        width: 100%;
+        height: 1px;
+        background: #777;
+        border: none;
+    }
+
+    .spatial-scroll-range::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 6px;
+        height: 6px;
+        margin-top: -2.5px;
+        background: #fff;
+        border: none;
+        border-radius: 50%;
+        box-shadow: none;
+    }
+
+    .spatial-scroll-range::-moz-range-thumb {
+        width: 6px;
+        height: 6px;
+        background: #fff;
+        border: none;
+        border-radius: 50%;
+        box-shadow: none;
+    }
+
+    /* COUNTER */
 
     .spatial-scroll-count {
-        bottom: -22px;
-        font-size: 10px;
+        position: absolute;
+        top: 24px;
+        right: 48px;
+        bottom: auto;
+        font-size: 9px;
+        line-height: 16px;
         letter-spacing: 0;
+        white-space: nowrap;
+        color: #999;
     }
 
+    /* HORIZONTAL ARROWS */
+
     .spatial-arrows {
+        position: absolute;
+        top: calc(48px + env(safe-area-inset-top, 0px));
         right: 20px;
-        top: calc(192px + env(safe-area-inset-top, 0px));
         bottom: auto;
-        gap: 8px;
+        z-index: 13;
+        display: flex;
+        flex-direction: row-reverse;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        width: auto;
+        height: 16px;
+        padding: 0;
+        margin: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
     }
 
     .spatial-arrows button {
-        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 16px;
+        padding: 0;
+        margin: 0;
+        font-size: 0;
+        line-height: 1;
+        color: #fff;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .spatial-arrows button::after {
+        font-size: 14px;
+        line-height: 1;
+        font-weight: 400;
+    }
+
+    .spatial-arrows button:first-child::after {
+        content: "→";
+    }
+
+    .spatial-arrows button:last-child::after {
+        content: "←";
     }
 }
 
