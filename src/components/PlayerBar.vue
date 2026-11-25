@@ -33,6 +33,16 @@
                 @click="toggleMobilePlayer"
             >{{ mobileExpanded ? '⌄' : '⌃' }}</button>
         </div>
+        <button
+            v-if="mobileExpanded"
+            type="button"
+            class="mobile-collapse-button"
+            aria-label="Collapse player"
+            @click="toggleMobilePlayer"
+        >
+            ⌄
+        </button>
+
         <div class="player-line">
             <div class="current-track">
                 <router-link
@@ -1727,12 +1737,56 @@ input:focus-visible {
         letter-spacing: -0.3px;
     }
 
-    .audio-player:not(.mobile-expanded) > :not(.mobile-mini-player):not(audio) {
+    .audio-player:not(.mobile-expanded) > *:not(.mobile-mini-player):not(audio) {
         display: none;
     }
 
     .audio-player.mobile-expanded .player-line {
         margin-top: 10px;
+    }
+}
+
+
+@media (max-width: 768px) {
+
+    .audio-player.mobile-expanded .mobile-mini-player {
+        display: none;
+    }
+
+    .audio-player.mobile-expanded .player-line {
+        margin-top: 0;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .audio-player.mobile-expanded .current-track {
+        flex: 1 1 100%;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .audio-player.mobile-expanded .current-track strong,
+    .audio-player.mobile-expanded .current-track span {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .mobile-collapse-button {
+        display: block;
+        width: 28px;
+        min-height: 24px;
+        margin: 0 0 4px auto;
+        text-align: center;
+        font-size: 13px;
+        color: #fff;
+        cursor: pointer;
+    }
+}
+
+@media (min-width: 769px) {
+
+    .mobile-collapse-button {
+        display: none;
     }
 }
 </style>
